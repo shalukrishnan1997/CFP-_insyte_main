@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Donation Management System{% endblock %}</title>
+    
+    {% load static %}
+    {% load tailwind_cli %}
+    {% tailwind_css %}
+    
+    <!-- Professional Font - IBM Plex Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CRITICAL: Set sidebar width BEFORE any rendering -->
+    <script>
+      (function() {
+        var collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        document.documentElement.classList.add(collapsed ? 'sidebar-collapsed' : 'sidebar-expanded');
+        // Add no-transition class to prevent flash during page load
+        document.documentElement.classList.add('no-transition');
+      })();
+    </script>
+    
+    <!-- HTMX 2.0.8 - Self-hosted, load first -->
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+    <!-- HTMX config: faster settling, larger history cache -->
+    <meta name="htmx-config" content='{"defaultSettleDelay": 0, "historyCacheSize": 20}'>
+
+    <!-- Clean up SSE connections & timers before HTMX replaces the body (hx-boost) -->
+    <script>
+      document.addEventListener('htmx:beforeSwap', function (evt) {
+        // Only act on full-body swaps (hx-boost navigation)
+        if (evt.detail.target === document.body || evt.detail.target === document.documentElement) {
+          // Close SSE EventSource singleton
+          if (window._notificationSSE) {
+            window._notificationSSE.close();
+            window._notificationSSE = null;
+          }
+          // Cancel SSE reconnect timer
+          if (window._notificationSSERetryTimer) {
+            clearTimeout(window._notificationSSERetryTimer);
+            window._notificationSSERetryTimer = null;
+          }
+          // Clear polling interval
+          if (window._notificationPollInterval) {
+            clearInterval(window._notificationPollInterval);
+            window._notificationPollInterval = null;
+          }
+        }
+      });
+    </script>
+    
+    <!-- Alpine.js Collapse Plugin 3.15.8 - Must load before Alpine core -->
+    <script defer src="{% static 'js/alpine-collapse.min.js' %}"></script>
+    
+    <!-- Alpine.js 3.15.8 - Self-hosted, load with defer -->
+    <script defer src="{% static 'js/alpine.min.js' %}"></script>
+    
+    <!-- Remove no-transition class after page loads -->
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          document.documentElement.classList.remove('no-transition');
+        }, 100);
+      });
+    </script>
+
+    <!-- Site default currency (GBP / Pound Sterling) -->
+    <meta name="currency-code" content="GBP">
+    <meta name="currency-symbol" content="£">
+    <script>
+      // Expose a small global currency object for client-side code
+      window.CURRENCY = window.CURRENCY || { code: "GBP", symbol: "£" };
+    </script>
+
+    <script>
+      (function () {
+        const flatpickrCssUrl = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
+        const flatpickrScriptUrl = 'https://cdn.jsdelivr.net/npm/flatpickr';
+
+        window.ensureFlatpickrAssets = window.ensureFlatpickrAssets || function () {
+          const existingStylesheet = document.querySelector(
+            'link[data-flatpickr-styles="true"], link[href*="flatpickr.min.css"]',
+          );
+
+          if (!existingStylesheet) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = flatpickrCssUrl;
+            link.setAttribute('data-flatpickr-styles', 'true');
+            document.head.appendChild(link);
+          }
+
+          if (window.flatpickr) {
+            return Promise.resolve(window.flatpickr);
+          }
+
+          if (window._flatpickrLoadPromise) {
+            return window._flatpickrLoadPromise;
+          }
+
+          window._flatpickrLoadPromise = new Promise((resolve, reject) => {
+            const existingScript = document.querySelector(
+              'script[data-flatpickr-script="true"], script[src*="flatpickr"]',
+            );
+
+            const handleLoad = () => {
+              if (window.flatpickr) {
+                resolve(window.flatpickr);
+                return;
+              }
+              window._flatpickrLoadPromise = null;
+              reject(new Error('Flatpickr did not initialize correctly.'));
+            };
+
+            const handleError = () => {
+              window._flatpickrLoadPromise = null;
+              reject(new Error('Flatpickr failed to load.'));
+            };
+
+            if (existingScript) {
+              existingScript.addEventListener('load', handleLoad, { once: true });
+              existingScript.addEventListener('error', handleError, { once: true });
+              return;
+            }
+
+            const script = document.createElement('script');
+            script.src = flatpickrScriptUrl;
+            script.async = true;
+            script.setAttribute('data-flatpickr-script', 'true');
+            script.addEventListener('load', handleLoad, { once: true });
+            script.addEventListener('error', handleError, { once: true });
+            document.head.appendChild(script);
+          });
+
+          return window._flatpickrLoadPromise;
+        };
+      })();
+    </script>
+    
+    {% block extra_head %}{% endblock %}
+  </head>
+  
+  <body class="{% block body_class %}min-h-screen bg-slate-50 antialiased{% endblock %}" hx-boost="true">
+    <!-- Progress bar (auto) + opt-in full spinner -->
+    {% include 'components/loading_spinner.html' %}
+    
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-blue-600 focus:text-white">
+      Skip to main content
+    </a>
+
+    {% if messages %}
+      <!-- Toast Notification Container -->
+      <div id="toast-container" 
+           class="fixed top-4 right-4 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none"
+           role="region" 
+           aria-label="Notifications" 
+           aria-live="polite">
+        {% for msg in messages %}
+          {% if 'error' in msg.tags %}
+            {% include 'components/toast.html' with type='error' message=msg id=forloop.counter %}
+          {% elif 'warning' in msg.tags %}
+            {% include 'components/toast.html' with type='warning' message=msg id=forloop.counter %}
+          {% elif 'success' in msg.tags %}
+            {% include 'components/toast.html' with type='success' message=msg id=forloop.counter %}
+          {% else %}
+            {% include 'components/toast.html' with type='info' message=msg id=forloop.counter %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Toast Notification Logic (Global) -->
+    <script>
+      (function() {
+        /**
+         * Dismiss a toast notification with an animation
+         * @param {HTMLElement} toast - The toast element to dismiss
+         */
+        function dismissToast(toast) {
+          if (!toast || toast._dismissing) return;
+          toast._dismissing = true;
+          
+          // Add transition classes
+          toast.classList.add('opacity-0', 'translate-x-[110%]');
+          
+          // Remove from DOM after animation
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.remove();
+            }
+          }, 300);
+        }
+
+        /**
+         * Initialize new toasts: roles, IDs, and auto-dismiss
+         */
+        function initToasts() {
+          const toasts = document.querySelectorAll('.toast-notification:not([data-initialized])');
+          toasts.forEach((toast) => {
+            toast.setAttribute('data-initialized', 'true');
+            
+            // Ensure screen readers announce toasts
+            if (!toast.getAttribute('role')) {
+              toast.setAttribute('role', 'status');
+            }
+            if (!toast.getAttribute('aria-live')) {
+              toast.setAttribute('aria-live', 'polite');
+            }
+
+            // Auto-dismiss after 5 seconds (unless persistent)
+            if (!toast.hasAttribute('data-persistent')) {
+              const delay = parseInt(toast.getAttribute('data-dismiss-delay') || '5000');
+              setTimeout(() => dismissToast(toast), delay);
+            }
+          });
+        }
+
+        // ─── Event Listeners ───
+
+        // Initialize on load and after HTMX swaps
+        document.addEventListener('DOMContentLoaded', initToasts);
+        document.addEventListener('htmx:afterSwap', (e) => {
+          // Only init if the target or its children might contain toasts
+          initToasts();
+        });
+
+        // Global Event Delegation for close buttons
+        document.addEventListener('click', (e) => {
+          const dismissBtn = e.target.closest('[data-toast-dismiss]');
+          if (dismissBtn) {
+            const toast = dismissBtn.closest('.toast-notification');
+            if (toast) {
+              dismissToast(toast);
+            }
+          }
+        });
+        
+        // Expose helper globally just in case
+        window.dismissToast = dismissToast;
+
+        /**
+         * Generic helper: focus first focusable element when a modal appears
+         */
+        function initModals() {
+          const modalObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+              if (m.type === 'attributes' && (m.attributeName === 'style' || m.attributeName === 'class' || m.attributeName === 'x-show')) {
+                const dialog = m.target;
+                if (dialog.getAttribute && dialog.getAttribute('aria-modal') === 'true') {
+                  const isVisible = dialog.offsetParent !== null;
+                  if (isVisible && !dialog._focused) {
+                    dialog._focused = true;
+                    // focus first focusable element
+                    const focusable = dialog.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                    if (focusable) focusable.focus();
+                    dialog.setAttribute('tabindex', '-1');
+                  } else if (!isVisible) {
+                    dialog._focused = false;
+                  }
+                }
+              }
+            }
+          });
+          modalObserver.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['style', 'class', 'x-show'] });
+        }
+        document.addEventListener('DOMContentLoaded', initModals);
+      })();
+    </script>
+
+
+    <!-- Main Content Area -->
+    <div id="page-shell" class="{% block page_shell_class %}min-h-screen{% endblock %}">
+      {% block content %}{% endblock %}
+    </div>
+    
+    {% block modals %}{% endblock %}
+
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

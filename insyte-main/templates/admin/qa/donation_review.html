@@ -1,0 +1,1260 @@
+{% extends 'layouts/admin_layout.html' %}
+
+{% block title %}QA Review: {{ batch.batch_name }}{% endblock %}
+
+{% block extra_head %}
+{% for preload in preload_images %}
+<link rel="preload" as="image" href="{{ preload.url }}">
+{% endfor %}
+{% if requires_card_tokenization and stripe_gateway_ready %}
+<script src="https://js.stripe.com/v3/"></script>
+{% endif %}
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-4">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex items-center gap-3">
+      <a href="{% url 'custom_admin:qa_dashboard' %}" class="text-gray-500 hover:text-gray-700"
+        title="Back to QA dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </a>
+      <div>
+        <p class="text-sm text-gray-500">{{ batch.campaign.client.name }} • {{ batch.campaign.name }}</p>
+        <h1 class="text-xl font-semibold text-gray-900">QA Review: {{ batch.batch_name }}</h1>
+        <p class="text-xs text-gray-500 mt-0.5">Batch settings: {{ donation.currency }} • {{ batch.get_default_payment_method_display|default:donation.get_payment_method_display }}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if donation.field_data.intake_subtype == 'donor_update' %}
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700"
+            data-testid="donor-update-badge"
+            title="Operator captured a non-financial donor update on a phone call. Donor record was mutated at intake; QA review is informational.">
+        Donor Update (phone)
+      </span>
+      {% endif %}
+      <span class="px-3 py-1 rounded-full text-xs font-semibold
+        {% if donation.qa_status == 'approved' %}bg-green-100 text-green-700
+        {% elif donation.qa_status == 'rejected' %}bg-red-100 text-red-700
+        {% elif donation.qa_status == 'flagged' %}bg-yellow-100 text-yellow-700
+        {% else %}bg-gray-100 text-gray-700{% endif %}">
+        {{ donation.get_qa_status_display }}
+      </span>
+      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Batch {{ batch.get_status_display }}</span>
+    </div>
+  </div>
+
+  {% if reviewer_lock_conflict %}
+  <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2"
+       data-testid="reviewer-lock-banner">
+    <svg class="w-5 h-5 mt-0.5 flex-shrink-0 text-amber-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <path fill-rule="evenodd" d="M5 9V7a5 5 0 1110 0v2h1a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6a2 2 0 012-2h1zm2 0h6V7a3 3 0 10-6 0v2z" clip-rule="evenodd"/>
+    </svg>
+    <div>
+      <p class="font-semibold">Batch already claimed</p>
+      <p>This batch is being reviewed by <span class="font-semibold">{{ reviewer_lock_holder_name }}</span>
+        (locked {{ reviewer_lock_minutes_ago }} minute{{ reviewer_lock_minutes_ago|pluralize }} ago) — wait or contact them.
+        Saves and QA actions on this page will be rejected until the claim is released.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% include 'admin/qa/components/navigation_bar.html' %}
+
+  <!-- New Two-Column Layout: Fixed Image + Scrollable Form -->
+  <div class="qa-review-shell grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+
+    <!-- Left: Document Viewer — all pages in one PDF (form + payment doc) -->
+    {% include "components/scanned_form_viewer.html" with image_url=scanned_form_url predicted_url=predicted_scanned_form_url has_image=has_scanned_form page_urls_json=scanned_form_page_urls_json viewer_id="qa-viewer" subtitle=donation.payment_method|title compact=False redaction_enabled=scan_redaction_required redaction_pending=scan_redaction_pending redaction_status=scan_redaction_status redaction_notes=scan_redaction_notes redaction_save_url=scan_redaction_save_url %}
+
+    <!-- Right: Scrollable Form with Reordered Sections -->
+    <div class="qa-review-scroll space-y-4">
+      <form method="post" id="qa-review-form" class="flat-card compact-form" hx-boost="false">
+        {% csrf_token %}
+
+        <!-- Header -->
+        <div class="dense-panel-header bg-slate-50">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-semibold text-gray-900">Edit Donation</h2>
+            <span class="text-base font-semibold text-gray-900">£{{ donation.amount|floatformat:2 }} {{ donation.currency }}</span>
+          </div>
+        </div>
+
+        <div class="p-4 space-y-4 qa-form-stack">
+          {% if requires_card_tokenization %}
+          <input type="hidden" name="stripe_payment_method_id" id="stripe_payment_method_id">
+          {% endif %}
+
+          {% if has_low_confidence_hold %}
+          <div class="rounded-md border-2 border-red-300 bg-red-50 px-4 py-3" data-test="low-confidence-hold">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 mt-0.5 text-red-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-red-800">Mandatory review — low OCR confidence</p>
+                <p class="mt-1 text-xs text-red-700">
+                  This donation will <strong>not</strong> be auto-approved on batch approval. Verify each highlighted field against the form before approving.
+                </p>
+                <ul class="mt-2 space-y-1">
+                  {% for record in low_confidence_records %}
+                  <li class="text-sm text-red-800">
+                    <span class="font-mono font-semibold uppercase tracking-wide bg-red-200/60 px-1.5 py-0.5 rounded">{{ record.field }}</span>
+                    {% if record.confidence is not None %}
+                    <span class="ml-1 text-xs text-red-700">confidence {{ record.confidence|floatformat:2 }}</span>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="space-y-4">
+          <!-- 1. DONOR INFORMATION (First) -->
+          <div class="qa-section-card p-4 border-l-4 {% if active_donor and not active_donor.urn %}border-amber-500 bg-amber-50/40{% else %}border-purple-500 bg-slate-50{% endif %}"
+               x-data="donorAssignWidget('{% url 'custom_admin:donor_search' %}', '{% url 'custom_admin:htmx_assign_donor_to_donation' donation.id %}', '{{ active_donor.urn|default:''|escapejs }}')">
+            <h4 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <svg class="w-5 h-5 {% if active_donor and not active_donor.urn %}text-amber-600{% else %}text-blue-600{% endif %}" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+              </svg>
+              Donor Information
+              {% if active_donor and not active_donor.urn %}
+              <span class="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                New Donor — URN Pending
+              </span>
+              {% endif %}
+              {% if active_donor.pending_review %}
+              <span class="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-300">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                Auto-created — Pending QA Confirmation
+              </span>
+              {% endif %}
+            </h4>
+            {% if active_donor.pending_review %}
+            <div class="mb-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800 flex items-center justify-between gap-3 flex-wrap">
+              <span>
+                This donor was auto-created by the scan pipeline. Confirm the identity is genuine before it joins the house file, or reject to disconnect this placeholder.
+              </span>
+              <form method="post" action="{% url 'custom_admin:qa_resolve_pending_donor' batch.id donation.id %}" class="flex items-center gap-2">
+                {% csrf_token %}
+                <button type="submit" name="action" value="confirm"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700">
+                  Confirm Donor
+                </button>
+                <button type="submit" name="action" value="reject"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-md bg-white text-orange-700 border border-orange-300 hover:bg-orange-100">
+                  Reject &amp; Disconnect
+                </button>
+              </form>
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div class="relative">
+                <label class="block text-sm text-gray-700 mb-1">URN
+                  {% if active_donor and not active_donor.urn %}
+                  <span class="text-amber-600 font-medium">(pending — assigned by charity)</span>
+                  {% endif %}
+                </label>
+                <input type="text" name="donor_urn" id="donor_urn" value="{{ active_donor.urn }}"
+                  {% if not donation.donor %}
+                  x-model="query"
+                  @input.debounce.300ms="search()"
+                  @keydown.escape="results = []"
+                  @keydown.enter.prevent="if (results.length > 0) { select(results[0]); submitAssign(); }"
+                  {% endif %}
+                  class="w-full px-3 py-2 border {% if active_donor and not active_donor.urn %}border-amber-300 bg-amber-50{% else %}border-gray-300 bg-white{% endif %} rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="{% if donation.donor %}Unique reference number (leave blank if not yet assigned){% else %}Type URN/name/email to find donor...{% endif %}" />
+                {% if not donation.donor %}
+                <ul x-show="results.length > 0" x-cloak
+                    class="workspace-dropdown absolute z-50 mt-1 max-h-56 w-full overflow-y-auto">
+                  <template x-for="d in results" :key="d.donor_pk">
+                    <li @click="select(d); submitAssign();"
+                        class="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 flex items-center justify-between gap-3">
+                      <span class="min-w-0">
+                        <span class="font-medium block truncate" x-text="d.full_name"></span>
+                        <span class="text-gray-500 text-xs" x-text="d.urn ? 'URN: ' + d.urn : 'No URN'"></span>
+                      </span>
+                      <span class="text-xs text-gray-400 truncate" x-text="d.email"></span>
+                    </li>
+                  </template>
+                </ul>
+                <p x-show="submitting" x-cloak class="mt-1 text-xs text-blue-600">Linking donor…</p>
+                {% endif %}
+                {% if active_donor and not active_donor.urn %}
+                <p class="mt-1 text-xs text-amber-600">URN will be assigned automatically when the charity's updated house file is imported on the matching client's edit page.</p>
+                {% endif %}
+              </div>
+              <div class="md:col-span-2 xl:col-span-1">
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Title <span class="text-red-500">*</span>{% if confidence_scores.title %}{% include "components/confidence_badge.html" with score=confidence_scores.title %}{% endif %}</label>
+                <input type="text" name="donor_title" value="{{ active_donor.title }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Mr/Mrs/Ms/Dr" required />
+              </div>
+              <div class="md:col-span-1 xl:col-span-1">
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">First Name <span
+                    class="text-red-500">*</span>{% if confidence_scores.donor_name %}{% include "components/confidence_badge.html" with score=confidence_scores.donor_name %}{% endif %}</label>
+                <input type="text" name="donor_first_name" value="{{ active_donor.first_name }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="First name" required />
+              </div>
+              <div class="md:col-span-1 xl:col-span-1">
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Last Name <span
+                    class="text-red-500">*</span>{% if confidence_scores.donor_name %}{% include "components/confidence_badge.html" with score=confidence_scores.donor_name %}{% endif %}</label>
+                <input type="text" name="donor_last_name" value="{{ active_donor.last_name }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Last name" required />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Package code <span class="text-red-500">*</span></label>
+                <input type="text" name="package_code" id="package_code" value="{{ package_code }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="e.g. PKG01" required />
+              </div>
+              <div class="md:col-span-2 xl:col-span-4">
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Address Line 1 <span class="text-red-500">*</span>{% if confidence_scores.address_line1 %}{% include "components/confidence_badge.html" with score=confidence_scores.address_line1 %}{% endif %}</label>
+                <input type="text" name="donor_address_line1" value="{{ active_donor.address_line1 }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Street address" required />
+              </div>
+              <div class="md:col-span-2 xl:col-span-4">
+                <label class="block text-sm text-gray-700 mb-1">Address Line 2{% if confidence_scores.address_line2 %}{% include "components/confidence_badge.html" with score=confidence_scores.address_line2 %}{% endif %}</label>
+                <input type="text" name="donor_address_line2" value="{{ active_donor.address_line2 }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Apartment, suite, etc." />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">City{% if confidence_scores.city %}{% include "components/confidence_badge.html" with score=confidence_scores.city %}{% endif %}</label>
+                <input type="text" name="donor_city" value="{{ active_donor.city }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="City" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">County{% if confidence_scores.county %}{% include "components/confidence_badge.html" with score=confidence_scores.county %}{% endif %}</label>
+                <input type="text" name="donor_county" value="{{ active_donor.county }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="County" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Postcode <span class="text-red-500">*</span>{% if confidence_scores.postcode %}{% include "components/confidence_badge.html" with score=confidence_scores.postcode %}{% endif %}</label>
+                <input type="text" name="donor_postcode" value="{{ active_donor.postcode }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="SW1A 1AA" required />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Country</label>
+                <input type="text" name="donor_country" value="{{ active_donor.country }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="United Kingdom" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Email{% if confidence_scores.email %}{% include "components/confidence_badge.html" with score=confidence_scores.email %}{% endif %}</label>
+                <input type="email" name="donor_email" value="{{ active_donor.email }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="email@example.com" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Phone{% if confidence_scores.phone %}{% include "components/confidence_badge.html" with score=confidence_scores.phone %}{% endif %}</label>
+                <input type="text" name="donor_phone" value="{{ active_donor.phone }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Phone number" />
+              </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <p class="text-xs font-medium text-gray-600 mb-2">Donor Preferences</p>
+              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                <label class="qa-checkbox-label">
+                  <input type="checkbox" name="donor_no_thank_you"
+                    class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if active_donor.no_thank_you %}checked{% endif %}>
+                  <span class="qa-checkbox-text text-gray-700">No thank you</span>
+                </label>
+                <label class="qa-checkbox-label">
+                  <input type="checkbox" name="donor_opt_in_email"
+                    class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if active_donor.opt_in_email %}checked{% endif %}>
+                  <span class="qa-checkbox-text text-gray-700"><span>Email</span>{% if confidence_scores.email_consent %}{% include "components/confidence_badge.html" with score=confidence_scores.email_consent no_margin=True %}{% endif %}</span>
+                </label>
+                <label class="qa-checkbox-label">
+                  <input type="checkbox" name="donor_opt_in_sms"
+                    class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if active_donor.opt_in_sms %}checked{% endif %}>
+                  <span class="qa-checkbox-text text-gray-700"><span>SMS</span>{% if confidence_scores.sms_consent %}{% include "components/confidence_badge.html" with score=confidence_scores.sms_consent no_margin=True %}{% endif %}</span>
+                </label>
+                <label class="qa-checkbox-label">
+                  <input type="checkbox" name="donor_opt_in_phone"
+                    class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if active_donor.opt_in_phone %}checked{% endif %}>
+                  <span class="qa-checkbox-text text-gray-700"><span>Phone</span>{% if confidence_scores.phone_consent %}{% include "components/confidence_badge.html" with score=confidence_scores.phone_consent no_margin=True %}{% endif %}</span>
+                </label>
+                <label class="qa-checkbox-label">
+                  <input type="checkbox" name="donor_opt_in_post"
+                    class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if active_donor.opt_in_post %}checked{% endif %}>
+                  <span class="qa-checkbox-text text-gray-700"><span>Post</span>{% if confidence_scores.post_consent %}{% include "components/confidence_badge.html" with score=confidence_scores.post_consent no_margin=True %}{% endif %}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {% if field_data_items %}
+          <details class="qa-section-card overflow-hidden">
+            <summary class="cursor-pointer list-none px-4 py-3 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-gray-900 flex items-center justify-between gap-3 [&_summary::-webkit-details-marker]:hidden">
+              <span>Custom Fields</span>
+              <span class="text-xs font-medium text-gray-500">{{ field_data_items|length }} item{{ field_data_items|length|pluralize }}</span>
+            </summary>
+            <div class="p-4">
+              <dl class="divide-y divide-gray-200">
+                {% for key, value in field_data_items %}
+                <div class="py-2.5 flex justify-between gap-4">
+                  <dt class="text-sm font-medium text-gray-600">{{ key }}</dt>
+                  <dd class="text-sm text-gray-900 text-right break-words font-medium">{{ value }}</dd>
+                </div>
+                {% endfor %}
+              </dl>
+            </div>
+          </details>
+          {% endif %}
+          <!-- 2. DONATION DETAILS (Second) -->
+          <div class="qa-section-card border-l-4 border-green-500 bg-green-50/60 p-4">
+            <h4 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                <path fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"
+                  clip-rule="evenodd" />
+              </svg>
+              Donation Details
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1 font-semibold">Amount <span
+                    class="text-red-500">*</span>{% if confidence_scores.amount %}{% include "components/confidence_badge.html" with score=confidence_scores.amount %}{% endif %}</label>
+                <input type="number" step="0.01" name="amount" value="{{ donation.amount }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  required />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Donation Date <span class="text-xs text-gray-500">(editable)</span>{% if confidence_scores.donation_date %}{% include "components/confidence_badge.html" with score=confidence_scores.donation_date %}{% endif %}</label>
+                <input type="date" name="donation_date" value="{{ donation_date_initial|date:'Y-m-d' }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+              </div>
+              {% if donation.payment_method == 'direct_debit' or batch.default_payment_method == 'direct_debit' %}
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Frequency</label>
+                <select name="donation_frequency"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                  <option value="">One Time</option>
+                  {% for code,label in frequency_choices %}
+                  <option value="{{ code }}" {% if donation.donation_frequency == code %}selected{% endif %}>{{ label }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-gray-500">💡 For recurring Direct Debit payments</p>
+              </div>
+              {% endif %}
+              <label for="gift_aid" class="qa-checkbox-label pt-6 font-medium">
+                <input type="checkbox" id="gift_aid" name="gift_aid"
+                  class="h-4 w-4 shrink-0 text-blue-600 rounded focus:ring-blue-500" {% if donation.gift_aid %}checked{% endif %}>
+                <span class="qa-checkbox-text">
+                  <span>Gift Aid</span>
+                  {% if confidence_scores.gift_aid %}{% include "components/confidence_badge.html" with score=confidence_scores.gift_aid no_margin=True %}{% endif %}
+                </span>
+              </label>
+            </div>
+            <div class="mt-3 space-y-3">
+          <!-- 3. PAYMENT DETAILS (Third - Filtered by batch payment method) -->
+          {% if batch.default_payment_method == 'direct_debit' or donation.payment_method == 'direct_debit' %}
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Direct Debit Start</label>
+                <input type="date" name="direct_debit_start_date"
+                  value="{{ donation.direct_debit_start_date|date:'Y-m-d' }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Direct Debit End</label>
+                <input type="date" name="direct_debit_end_date"
+                  value="{{ donation.direct_debit_end_date|date:'Y-m-d' }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Sort Code <span class="text-xs text-gray-500">(encrypted, read-only)</span>{% if confidence_scores.sort_code %}{% include "components/confidence_badge.html" with score=confidence_scores.sort_code %}{% endif %}</label>
+                <input type="text" value="{{ donation.sort_code }}" readonly
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
+                  placeholder="—" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Account Number <span class="text-xs text-gray-500">(encrypted, read-only)</span>{% if confidence_scores.account_number %}{% include "components/confidence_badge.html" with score=confidence_scores.account_number %}{% endif %}</label>
+                <input type="text" value="{{ donation.account_number }}" readonly
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
+                  placeholder="—" />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if batch.default_payment_method == 'cheque' or donation.payment_method == 'cheque' %}
+          <!-- Cheque Details -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Cheque Number{% if confidence_scores.cheque_number %}{% include "components/confidence_badge.html" with score=confidence_scores.cheque_number %}{% endif %}</label>
+                <input type="text" name="cheque_number" value="{{ donation.cheque_number }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="000123" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Cheque Date{% if confidence_scores.cheque_date %}{% include "components/confidence_badge.html" with score=confidence_scores.cheque_date %}{% endif %}</label>
+                <input type="date" name="cheque_date" value="{{ donation.cheque_date|date:'Y-m-d' }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if batch.default_payment_method == 'card' or donation.payment_method == 'card' or donation.payment_method == 'credit_card' or donation.payment_method == 'debit_card' %}
+          <!-- Card Details -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Card Holder Name{% if confidence_scores.card_holder_name %}{% include "components/confidence_badge.html" with score=confidence_scores.card_holder_name %}{% endif %}</label>
+                <input type="text" name="card_holder_name" value="{{ donation.card_holder_name }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Full name on card" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Last 4 Digits of Card{% if confidence_scores.card_last_four %}{% include "components/confidence_badge.html" with score=confidence_scores.card_last_four %}{% endif %}</label>
+                <input type="text" name="card_last_four" id="qa_card_last_four"
+                  value="{% if donation.card_last_four %}{{ donation.card_last_four }}{% endif %}"
+                  maxlength="4"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  autocomplete="off"
+                  title="Last four digits visible on the form if OCR populated them — leave blank if unknown"
+                  placeholder=""
+                  pattern="\d{4}" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Expiry (MM/YYYY){% if confidence_scores.card_expiry_date %}{% include "components/confidence_badge.html" with score=confidence_scores.card_expiry_date %}{% endif %}</label>
+                <input type="text" name="card_expiry_date" value="{% if donation.card_expiry_date %}{{ donation.card_expiry_date }}{% endif %}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  autocomplete="off"
+                  title="Expiry as MM/YYYY if OCR populated it — leave blank otherwise"
+                  placeholder="MM/YYYY" />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if batch.default_payment_method == 'caf_voucher' or donation.payment_method == 'caf_voucher' or batch.default_payment_method == 'caf' or donation.payment_method == 'caf' %}
+          <!-- CAF Voucher -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">CAF Voucher Number{% if confidence_scores.caf_voucher_number %}{% include "components/confidence_badge.html" with score=confidence_scores.caf_voucher_number %}{% endif %}</label>
+                <input type="text" name="caf_voucher_number" value="{{ donation.caf_voucher_number }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Voucher ID" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">CAF Donor Name</label>
+                <input type="text" name="caf_donor_name" value="{{ donation.caf_donor_name }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Donor name on voucher" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">CAF Amount{% if confidence_scores.caf_amount %}{% include "components/confidence_badge.html" with score=confidence_scores.caf_amount %}{% endif %}</label>
+                <input type="number" step="0.01" name="caf_amount" value="{{ donation.caf_amount }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="0.00" />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if batch.default_payment_method == 'postal_order' or donation.payment_method == 'postal_order' or batch.default_payment_method == 'postal_cheque' or donation.payment_method == 'postal_cheque' %}
+          <!-- Postal Order -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Postal Order Number{% if confidence_scores.postal_order_number %}{% include "components/confidence_badge.html" with score=confidence_scores.postal_order_number %}{% endif %}</label>
+                <input type="text" name="postal_order_number" value="{{ donation.postal_order_number }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Order number" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Postal Order Date</label>
+                <input type="date" name="postal_order_date" value="{{ donation.postal_order_date|date:'Y-m-d' }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Postal Issuer</label>
+                <input type="text" name="postal_issuer" value="{{ donation.postal_issuer }}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Post Office" />
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if batch.default_payment_method == 'non_financial' or donation.payment_method == 'non_financial' %}
+          <!-- Non-Financial/No Payment -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Reason</label>
+                <select name="non_financial_reason"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                  <option value="">-- Select Reason --</option>
+                  <option value="in_kind" {% if donation.non_financial_reason == 'in_kind' %}selected{% endif %}>In-Kind
+                    Donation</option>
+                  <option value="volunteering" {% if donation.non_financial_reason == 'volunteering' %}selected{% endif %}>
+                    Volunteering</option>
+                  <option value="pledge" {% if donation.non_financial_reason == 'pledge' %}selected{% endif %}>Pledge Only
+                  </option>
+                  <option value="legacy" {% if donation.non_financial_reason == 'legacy' %}selected{% endif %}>Legacy/Will
+                  </option>
+                  <option value="sponsorship" {% if donation.non_financial_reason == 'sponsorship' %}selected{% endif %}>
+                    Sponsorship</option>
+                  <option value="other" {% if donation.non_financial_reason == 'other' %}selected{% endif %}>Other
+                  </option>
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-sm text-gray-700 mb-1">Additional Notes</label>
+                <textarea name="non_financial_notes" rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="Additional details about the non-financial donation">{{ donation.non_financial_notes }}</textarea>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+          </div>
+          </div>
+
+          {% if awaiting_authentication %}
+          <div class="qa-section-card border-l-4 border-amber-500 bg-amber-50 px-4 py-3">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <h4 class="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  3DS / SCA authentication required
+                </h4>
+                <p class="text-xs text-amber-800 mt-1">
+                  This card donation needs the donor to complete a 3D Secure / Strong Customer Authentication challenge before the charge can settle. Use the button on the right to email the donor a one-time Stripe-hosted authentication link.
+                </p>
+                {% if authentication_link_sent_at %}
+                <p class="text-xs text-amber-700 mt-1">
+                  Last link sent at <strong>{{ authentication_link_sent_at|date:"Y-m-d H:i" }}</strong>. Click again to issue a fresh link if the previous one expired.
+                </p>
+                {% endif %}
+              </div>
+              <form method="post" action="{{ send_authentication_link_url }}" class="shrink-0" hx-boost="false">
+                {% csrf_token %}
+                <button type="submit"
+                  class="dense-button bg-amber-600 text-white font-medium rounded-md hover:bg-amber-700 focus:ring-4 focus:ring-amber-200 transition-colors">
+                  <span class="flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    Send authentication link to donor
+                  </span>
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if requires_card_tokenization %}
+          <details class="qa-section-card overflow-hidden" {% if not stripe_gateway_ready %}open{% endif %}>
+            <summary class="cursor-pointer list-none px-4 py-3 bg-indigo-50 border-b border-indigo-100 text-sm font-semibold text-indigo-900 flex items-center justify-between gap-3 [&_summary::-webkit-details-marker]:hidden">
+              <span>Secure Card Entry For Approval</span>
+              <span class="rounded-full bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700 border border-indigo-200">Stripe.js</span>
+            </summary>
+            <div class="p-4 space-y-3">
+              <p class="text-xs text-indigo-700">
+                Card details are sent directly to Stripe from the browser. The backend only receives a tokenized payment method.
+              </p>
+              {% if stripe_gateway_ready %}
+              <div>
+                <label for="qa-stripe-card-element" class="block text-sm font-medium text-gray-700 mb-2">
+                  Card Details
+                </label>
+                <div id="qa-stripe-card-element"
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-3"></div>
+                <p id="qaStripeCardError" class="mt-2 hidden text-sm text-red-600"></p>
+              </div>
+              {% else %}
+              <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 space-y-1">
+                <p>Stripe is not configured for this client. Card donations cannot be approved until a Stripe publishable key is available.</p>
+                {% if stripe_unavailable_reason %}
+                  <p class="text-xs text-amber-700">
+                    <span class="font-medium">Reason:</span> {{ stripe_unavailable_reason }}
+                  </p>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </details>
+          {% endif %}
+
+          <div class="qa-actions-primary sticky-actions qa-section-card border-l-4 border-emerald-500 bg-emerald-50/70 px-4 py-3"
+               x-data="{ rejectReason: '{{ qa_reject_reason_current|default:''|escapejs }}' }">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div class="min-w-0 flex-1 space-y-2">
+                <div id="qa-redaction-warning"
+                  class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 {% if not scan_redaction_pending %}hidden{% endif %}">
+                  Complete the on-screen scan redaction before approving this donation.
+                </div>
+                <div>
+                  <label for="qa_reject_reason" class="block text-sm font-medium text-gray-700 mb-1">
+                    Reject reason
+                    <span class="text-gray-500 font-normal text-xs">(required when rejecting)</span>
+                  </label>
+                  <select id="qa_reject_reason" name="qa_reject_reason" x-model="rejectReason"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm">
+                    <option value="">— Select reason —</option>
+                    {% for value, label in qa_reject_reason_choices %}
+                    <option value="{{ value }}" {% if value == qa_reject_reason_current %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label for="qa_notes" class="block text-sm font-medium text-gray-700 mb-1">
+                    QA notes
+                    <span class="text-gray-500 font-normal text-xs"
+                      x-text="rejectReason === '{{ qa_reject_reason_other_value }}' ? '(required when reason is Other)' : '(optional detail)'"></span>
+                  </label>
+                  <textarea id="qa_notes" name="qa_notes" rows="2" placeholder="Internal notes or detail for 'Other' reject reason…"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm">{{ qa_notes_prefill }}</textarea>
+                </div>
+              </div>
+              <div class="flex items-center justify-end gap-2 shrink-0">
+                <button type="submit" name="action" value="approve"
+                  id="qa-approve-button"
+                  formnovalidate
+                  {% if requires_card_tokenization and not stripe_gateway_ready %}disabled{% endif %}
+                  class="dense-button bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:ring-4 focus:ring-green-200 transition-colors">
+                  <span class="flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {% if requires_card_tokenization %}Approve, Charge & Next{% else %}Approve & Next{% endif %}
+                  </span>
+                </button>
+                <button type="submit" name="action" value="reject"
+                  formnovalidate
+                  class="dense-button bg-red-600 text-white font-medium rounded-md hover:bg-red-700 focus:ring-4 focus:ring-red-200 transition-colors">
+                  <span class="flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Reject & Next
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <form method="post" class="flat-card border-amber-200 overflow-hidden" hx-boost="false">
+        {% csrf_token %}
+        <input type="hidden" name="save_donor_status" value="1">
+        <div class="dense-panel-header bg-amber-50 border-b border-amber-200">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-amber-900">Donor Contact Status</h3>
+            <span class="text-xs text-amber-700">Independent of approve/reject</span>
+          </div>
+          <p class="mt-1 text-xs text-amber-800">
+            Flag donors as gone-away, deceased, or suppressed. Future postal letters are excluded automatically — the current donation's payment still processes.
+          </p>
+        </div>
+        <div class="p-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] md:items-end">
+          <div>
+            <label for="donor_contact_status" class="block text-sm font-medium text-gray-700 mb-1">Contact status</label>
+            <select id="donor_contact_status" name="contact_status"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm">
+              {% for value, label in donor_contact_status_choices %}
+              <option value="{{ value }}" {% if value == donor_contact_status_current %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="donor_contact_status_reason" class="block text-sm font-medium text-gray-700 mb-1">
+              Reason / source
+              <span class="text-gray-500 font-normal text-xs">(optional)</span>
+            </label>
+            <input type="text" id="donor_contact_status_reason" name="contact_status_reason"
+              value="{{ donor_contact_status_reason_current }}"
+              placeholder="e.g. Family informed us"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm">
+          </div>
+          <div>
+            <button type="submit"
+              class="dense-button w-full md:w-auto bg-amber-600 text-white font-medium rounded-md hover:bg-amber-700 focus:ring-4 focus:ring-amber-200 transition-colors">
+              Update donor status
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {% if rejected_records %}
+      <section class="flat-card border-red-200 overflow-hidden">
+        <div class="dense-panel-header bg-red-50">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-red-900">Rejected Records</h3>
+            <span class="rounded-full border border-red-200 bg-white px-2 py-0.5 text-xs font-semibold text-red-700">
+              {{ rejected_records|length }} record{{ rejected_records|length|pluralize }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-red-700">Rejection reasons from donation-level QA notes.</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="dense-table min-w-full divide-y divide-red-100 text-sm">
+            <thead class="bg-red-50/60">
+              <tr>
+                <th class="text-left">Donation</th>
+                <th class="text-left">Supporter</th>
+                <th class="text-left">Amount</th>
+                <th class="text-left">Rejected At</th>
+                <th class="text-left">Reason</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-red-100 bg-white">
+              {% for record in rejected_records %}
+              <tr class="hover:bg-red-50/40 transition-colors">
+                <td class="align-top">
+                  <a href="{{ record.detail_url }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                    {{ record.id|slice:":8" }}...
+                  </a>
+                </td>
+                <td class="align-top">
+                  <p class="font-medium text-gray-900">{{ record.supporter_name }}</p>
+                  {% if record.supporter_urn %}
+                  <p class="text-xs font-mono text-gray-500">{{ record.supporter_urn }}</p>
+                  {% endif %}
+                </td>
+                <td class="align-top whitespace-nowrap font-semibold text-gray-900">£{{ record.amount|floatformat:2 }}</td>
+                <td class="align-top whitespace-nowrap text-gray-600">
+                  {{ record.updated_at|date:"d/m/Y H:i" }}
+                </td>
+                <td class="align-top">
+                  <p class="text-sm text-gray-700 whitespace-pre-line">{{ record.reason }}</p>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if is_last_donation %}
+      <!-- Batch Actions Card (only shown on last donation) -->
+      <details class="flat-card border-blue-200 overflow-hidden">
+        <summary class="cursor-pointer list-none px-4 py-3 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-gray-900 flex items-center justify-between gap-3 [&_summary::-webkit-details-marker]:hidden">
+          <span>Batch Actions</span>
+          <span class="text-xs font-medium text-gray-500">Finalize batch</span>
+        </summary>
+        <div class="p-4 space-y-4">
+          <!-- Batch Statistics -->
+          <div class="bg-gray-50 rounded-md p-4">
+            <h4 class="text-sm font-medium text-gray-700 mb-3">Batch Review Summary</h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-gray-600">Total Donations:</span>
+                <span class="font-semibold text-gray-900">{{ donation_stats.total }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-gray-600">Approved:</span>
+                <span class="font-semibold text-green-600">{{ donation_stats.approved_count }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-gray-600">Rejected:</span>
+                <span class="font-semibold text-red-600">{{ donation_stats.rejected_count }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-gray-600">Pending:</span>
+                <span class="font-semibold text-yellow-600">{{ donation_stats.pending_count }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-gray-600">Flagged:</span>
+                <span class="font-semibold text-amber-600">{{ donation_stats.flagged_count }}</span>
+              </div>
+            </div>
+
+            {% if not all_donations_reviewed %}
+            <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                  </path>
+                </svg>
+                <p class="text-sm text-yellow-800">
+                  <strong>Note:</strong> {{ donation_stats.pending_count }} pending and {{ donation_stats.flagged_count }} flagged donation(s) remain.
+                  Approving the batch now will <strong>auto-approve</strong> all remaining pending and flagged donations.
+                </p>
+              </div>
+            </div>
+            {% else %}
+            <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+              <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-sm text-green-800">
+                  <strong>Ready to approve!</strong> All {{ donation_stats.total }} donations have been reviewed.
+                </p>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- QA Notes for Batch -->
+          <div>
+            <label for="batch_notes" class="block text-[12px] font-medium text-slate-500 mb-2">
+              QA Notes for Batch
+              <span class="text-gray-500 font-normal">(required for rejection)</span>
+            </label>
+            <textarea id="batch_notes" name="batch_notes" rows="3"
+              class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Add notes about this batch review...">{{ batch.review_notes }}</textarea>
+            <p id="batchNotesError" class="mt-1 text-sm text-red-600 hidden">Please add rejection notes before rejecting
+              the batch.</p>
+          </div>
+
+          <!-- Batch Action Buttons -->
+          <div class="flex items-center justify-between gap-4">
+            <!-- Approve Batch Button -->
+            <form method="post" action="{% url 'custom_admin:qa_approve_batch' batch.id %}" class="contents">              <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+              <input type="hidden" name="batch_notes" id="approve_batch_notes">
+              <button type="submit"
+                onclick="document.getElementById('approve_batch_notes').value = document.getElementById('batch_notes').value;"
+                class="dense-button bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:ring-4 focus:ring-green-200 transition-colors">
+                <span class="flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Approve Batch
+                </span>
+              </button>
+            </form>
+
+            <!-- Reject Batch Button -->
+            <form method="post" action="{% url 'custom_admin:qa_reject_batch' batch.id %}" class="contents"
+              onsubmit="return openRejectBatchModal(event, this);">
+              <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+              <input type="hidden" name="batch_notes" id="reject_batch_notes">
+              <button type="submit"
+                onclick="document.getElementById('reject_batch_notes').value = document.getElementById('batch_notes').value;"
+                class="dense-button bg-red-600 text-white font-medium rounded-md hover:bg-red-700 focus:ring-4 focus:ring-red-200 transition-colors">
+                <span class="flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Reject Batch
+                </span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </details>
+      {% endif %}
+
+      {% if is_last_donation and batch.status == 'approved' and batch.gift_aid_report_path %}
+      <!-- Gift Aid Report download — auto-generated on batch approval -->
+      <div class="flat-card border-green-200">
+        <div class="flex items-center justify-between px-4 py-3">
+          <div class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <div>
+              <p class="text-sm font-semibold text-gray-900">Gift Aid Report</p>
+              <p class="text-xs text-gray-500">
+                HMRC-ready CSV · auto-generated on approval
+                {% if batch.gift_aid_submitted_at %}
+                  · <span class="text-green-700 font-medium">submitted to HMRC on {{ batch.gift_aid_submitted_at|date:"Y-m-d H:i" }}</span>
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="{% url 'custom_admin:download_gift_aid_report' batch.id %}"
+               class="dense-button flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download CSV
+            </a>
+            {% if not batch.gift_aid_submitted_at %}
+            <form method="post" action="{% url 'custom_admin:mark_gift_aid_submitted' batch.id %}"
+                  onsubmit="return confirm('Mark this Gift Aid CSV as submitted to HMRC? Banking reversals on this batch will then flag HMRC retraction.');">
+              {% csrf_token %}
+              <button type="submit"
+                      class="dense-button flex items-center gap-2 rounded-md border border-green-600 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50 transition-colors">
+                Mark submitted to HMRC
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if is_last_donation %}
+      <!-- Reject Batch Confirmation Modal -->
+      <div id="rejectBatchModal" class="fixed inset-0 overflow-y-auto h-full w-full hidden z-50"
+        style="background-color: rgba(0, 0, 0, 0.15);">
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <div class="workspace-modal relative w-full max-w-lg p-6 bg-white">
+            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+              <h3 class="text-base font-semibold text-gray-900">Reject Batch</h3>
+              <button type="button" onclick="closeRejectBatchModal()"
+                class="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <p class="text-sm text-gray-700">You are about to reject the entire batch <span class="font-semibold">{{ batch.batch_name }}</span>.</p>
+              <p class="text-sm text-gray-600">A notification will be sent to the batch creator. This cannot be undone
+                from this screen.</p>
+              <div class="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-800">
+                <div class="flex items-start gap-2">
+                  <svg class="w-5 h-5 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                    </path>
+                  </svg>
+                  <div>
+                    <p class="font-semibold">Please confirm rejection</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200">
+                <button type="button" onclick="closeRejectBatchModal()"
+                  class="dense-button rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button type="button" onclick="submitRejectBatch()"
+                  class="dense-button rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:ring-4 focus:ring-red-200">
+                  Confirm Reject Batch
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const qaReviewConfig = {
+        requiresCardTokenization: {{ requires_card_tokenization|yesno:"true,false" }},
+        stripePublishableKey: "{{ stripe_publishable_key|default:''|escapejs }}",
+      };
+
+      let rejectBatchForm = null;
+
+      window.formatCardNumberQA = function formatCardNumberQA(input) {
+        let value = input.value.replace(/\D/g, '');
+        let formatted = value.match(/.{1,4}/g)?.join(' ') || value;
+        input.value = formatted;
+      };
+
+      function getElementByIdWithin(root, id) {
+        if (root && typeof root.getElementById === 'function') {
+          return root.getElementById(id);
+        }
+        if (root && typeof root.querySelector === 'function') {
+          return root.querySelector(`#${id}`);
+        }
+        return document.getElementById(id);
+      }
+
+      function initializeQaStripeCardEntry(root = document) {
+        if (!qaReviewConfig.requiresCardTokenization) {
+          return;
+        }
+
+        const actionForm = getElementByIdWithin(root, 'qa-review-form');
+        const approveButton = getElementByIdWithin(root, 'qa-approve-button');
+        const paymentMethodInput = getElementByIdWithin(root, 'stripe_payment_method_id');
+        const errorEl = getElementByIdWithin(root, 'qaStripeCardError');
+        const cardMount = getElementByIdWithin(root, 'qa-stripe-card-element');
+
+        if (!actionForm || !approveButton || !paymentMethodInput || !cardMount) {
+          return;
+        }
+
+        if (actionForm.dataset.qaStripeInitialized === 'true') {
+          return;
+        }
+
+        if (!qaReviewConfig.stripePublishableKey || typeof Stripe === 'undefined') {
+          approveButton.disabled = true;
+          return;
+        }
+
+        actionForm.dataset.qaStripeInitialized = 'true';
+
+        const stripe = Stripe(qaReviewConfig.stripePublishableKey);
+        const elements = stripe.elements();
+        const cardElement = elements.create('card', {
+          hidePostalCode: true,
+          style: {
+            base: {
+              color: '#111827',
+              fontFamily: window._fontSans || getComputedStyle(document.body).fontFamily,
+              fontSize: '16px',
+              '::placeholder': {
+                color: '#9ca3af',
+              },
+            },
+            invalid: {
+              color: '#dc2626',
+            },
+          },
+        });
+        cardElement.mount(cardMount);
+
+        cardElement.on('change', function (event) {
+          if (!errorEl) {
+            return;
+          }
+          if (event.error) {
+            errorEl.textContent = event.error.message;
+            errorEl.classList.remove('hidden');
+          } else {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+          }
+        });
+
+        actionForm.addEventListener('submit', async function (event) {
+          const submitter = event.submitter;
+          if (!submitter || submitter.value !== 'approve') {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          submitter.disabled = true;
+
+          if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
+          }
+
+          const billingName = document.querySelector('[name="card_holder_name"]')?.value?.trim()
+            || [
+              document.querySelector('[name="donor_first_name"]')?.value?.trim(),
+              document.querySelector('[name="donor_last_name"]')?.value?.trim(),
+            ].filter(Boolean).join(' ');
+          const billingEmail = document.querySelector('[name="donor_email"]')?.value?.trim() || undefined;
+
+          const result = await stripe.createPaymentMethod({
+            type: 'card',
+            card: cardElement,
+            billing_details: {
+              name: billingName || undefined,
+              email: billingEmail,
+            },
+          });
+
+          if (result.error || !result.paymentMethod) {
+            if (errorEl) {
+              errorEl.textContent = result.error?.message || 'Card details could not be securely submitted to Stripe.';
+              errorEl.classList.remove('hidden');
+            }
+            submitter.disabled = false;
+            return;
+          }
+
+          paymentMethodInput.value = result.paymentMethod.id;
+
+          // form.submit() bypasses the submitter, so the button's name="action"
+          // value="approve" isn't sent. Inject it explicitly before submitting.
+          const actionInput = document.createElement('input');
+          actionInput.type = 'hidden';
+          actionInput.name = 'action';
+          actionInput.value = 'approve';
+          actionForm.appendChild(actionInput);
+
+          actionForm.submit();
+        });
+      }
+
+      function initializeQaDonationReviewPage(root = document) {
+        const cardLastFourInput = getElementByIdWithin(root, 'qa_card_last_four');
+        if (cardLastFourInput && cardLastFourInput.value) {
+          cardLastFourInput.value = cardLastFourInput.value.replace(/\D/g, '').slice(-4);
+        }
+
+        initializeQaStripeCardEntry(root);
+      }
+
+      function syncQaRedactionUi(detail) {
+        const warning = document.getElementById('qa-redaction-warning');
+        const pending = !!detail?.pending;
+        if (warning) {
+          warning.classList.toggle('hidden', !pending);
+        }
+      }
+
+      if (!window.__qaDonationReviewHtmxInitBound) {
+        document.body.addEventListener('htmx:load', function (event) {
+          initializeQaDonationReviewPage(event.target);
+        });
+        window.__qaDonationReviewHtmxInitBound = true;
+      }
+
+      if (!window.__qaDonationRedactionBound) {
+        window.addEventListener('qa-redaction-state', function (event) {
+          syncQaRedactionUi(event.detail || {});
+        });
+        window.__qaDonationRedactionBound = true;
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function handleQaReviewReady() {
+          initializeQaDonationReviewPage(document);
+        }, { once: true });
+      } else {
+        initializeQaDonationReviewPage(document);
+      }
+
+      window.openRejectBatchModal = function openRejectBatchModal(event, form) {
+        event.preventDefault();
+        const notesEl = document.getElementById('batch_notes');
+        const errorEl = document.getElementById('batchNotesError');
+
+        if (!notesEl || !notesEl.value.trim()) {
+          if (errorEl) {
+            errorEl.classList.remove('hidden');
+          }
+          if (notesEl) {
+            notesEl.focus();
+          }
+          return false;
+        }
+
+        if (errorEl) {
+          errorEl.classList.add('hidden');
+        }
+
+        document.getElementById('reject_batch_notes').value = notesEl.value.trim();
+        rejectBatchForm = form;
+        const modal = document.getElementById('rejectBatchModal');
+        if (modal) {
+          modal.classList.remove('hidden');
+        }
+        return false;
+      };
+
+      window.closeRejectBatchModal = function closeRejectBatchModal() {
+        const modal = document.getElementById('rejectBatchModal');
+        if (modal) {
+          modal.classList.add('hidden');
+        }
+      };
+
+      window.submitRejectBatch = function submitRejectBatch() {
+        if (rejectBatchForm) {
+          rejectBatchForm.submit();
+        }
+      };
+
+      window.donorAssignWidget = function donorAssignWidget(searchUrl, assignUrl, initialQuery = '') {
+        return {
+          searchUrl,
+          assignUrl,
+          query: initialQuery || '',
+          results: [],
+          selected: null,
+          submitting: false,
+          async search() {
+            if (this.query.length < 2) {
+              this.results = [];
+              return;
+            }
+            try {
+              const url = new URL(this.searchUrl, window.location.origin);
+              url.searchParams.set('q', this.query);
+              const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+              if (resp.ok) {
+                const data = await resp.json();
+                this.results = data.donors || [];
+              }
+            } catch (e) {
+              console.error('Donor search error', e);
+            }
+          },
+          select(donor) {
+            this.selected = donor;
+            this.query = donor.full_name;
+            this.results = [];
+          },
+          async submitAssign() {
+            if (!this.selected) {
+              return;
+            }
+            this.submitting = true;
+            try {
+              const token = document.querySelector('#qa-review-form input[name=csrfmiddlewaretoken]')?.value
+                || document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || '';
+              const body = new URLSearchParams();
+              body.set('csrfmiddlewaretoken', token);
+              body.set('donor_pk', this.selected.donor_pk);
+              const resp = await fetch(this.assignUrl, {
+                method: 'POST',
+                body,
+                headers: {
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'X-CSRFToken': token,
+                },
+                credentials: 'same-origin',
+              });
+              const redirect = resp.headers.get('HX-Redirect');
+              if (redirect) {
+                window.location.href = redirect;
+              } else if (resp.ok) {
+                window.location.reload();
+              }
+            } catch (e) {
+              console.error('Assign donor failed', e);
+            } finally {
+              this.submitting = false;
+            }
+          },
+        };
+      };
+    })();
+  </script>
+  {% endblock %}

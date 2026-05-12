@@ -1,0 +1,80 @@
+{% if donations %}
+<div class="overflow-x-auto">
+  <table class="min-w-full divide-y divide-gray-200 text-sm">
+    <thead class="bg-gray-50">
+      <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <th scope="col" class="px-4 py-3">Date</th>
+        <th scope="col" class="px-4 py-3">Supporter</th>
+        <th scope="col" class="px-4 py-3">Payment / ref</th>
+        <th scope="col" class="px-4 py-3 text-right">Amount</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 bg-white">
+      {% for donation in donations %}
+      <tr class="transition-colors hover:bg-gray-50/80">
+        <td class="whitespace-nowrap px-4 py-3 align-top text-gray-900">
+          {{ donation.donation_date|date:"d/m/Y"|default:donation.created_at|date:"d/m/Y" }}
+        </td>
+        <td class="px-4 py-3 align-top">
+          <p class="font-medium text-gray-900">
+            {% if donation.donor %}
+            {{ donation.donor.first_name }} {{ donation.donor.last_name }}
+            {% elif donation.data_file_donor %}
+            {{ donation.data_file_donor.first_name }} {{ donation.data_file_donor.last_name }}
+            {% else %}
+            {{ donation.donor_name|default:"Unknown" }}
+            {% endif %}
+          </p>
+          <p class="mt-1 font-mono text-xs text-gray-500">
+            {% if donation.donor %}
+            {{ donation.donor.urn|default:"" }}
+            {% elif donation.data_file_donor %}
+            {{ donation.data_file_donor.urn|default:"" }}
+            {% endif %}
+          </p>
+        </td>
+        <td class="px-4 py-3 align-top">
+          <p class="font-medium text-gray-900">{{ donation.get_payment_method_display }}</p>
+          <p class="mt-1 text-xs text-gray-500">
+            {% if donation.payment_method == 'cheque' %}
+            {{ donation.cheque_number|default:"No reference" }}
+            {% elif donation.payment_method == 'postal_order' %}
+            {{ donation.postal_order_number|default:"No reference" }}
+            {% elif donation.payment_method == 'caf' %}
+            {{ donation.caf_voucher_number|default:"No reference" }}
+            {% else %}
+            No reference
+            {% endif %}
+          </p>
+        </td>
+        <td class="whitespace-nowrap px-4 py-3 text-right align-top font-semibold text-gray-900">
+          £{{ donation.amount|floatformat:2 }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50/80 px-4 py-3 text-sm">
+  <p class="text-gray-500">Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</p>
+  <div class="flex items-center gap-2">
+    {% if page_obj.has_previous %}
+    <a
+      href="{% url 'custom_admin:daily_banking_batch_detail' batch.pk %}?{{ pagination_prev_qs }}"
+      class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50"
+    >Previous</a>
+    {% endif %}
+    {% if page_obj.has_next %}
+    <a
+      href="{% url 'custom_admin:daily_banking_batch_detail' batch.pk %}?{{ pagination_next_qs }}"
+      class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50"
+    >Next</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% else %}
+<p class="px-4 py-8 text-center text-sm text-gray-500">No donations match the banking filters for this batch in the selected date range.</p>
+{% endif %}

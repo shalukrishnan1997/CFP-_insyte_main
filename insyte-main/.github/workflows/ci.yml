@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev-arun
+      - main
+      - master
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install zbar shared library (for pyzbar)
+        run: sudo apt-get update && sudo apt-get install -y libzbar0
+
+      - name: Sync dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Block tracked secret files
+        run: |
+          set -e
+          disallowed_files=(
+            ".env"
+            ".env.production"
+            "gcp-service-account.json"
+            "gcp-service-account.json.b64"
+            "gcp-service-account.json.bak"
+          )
+
+          for secret_file in "${disallowed_files[@]}"; do
+            if git ls-files --error-unmatch "${secret_file}" >/dev/null 2>&1; then
+              echo "Disallowed tracked secret file detected: ${secret_file}"
+              exit 1
+            fi
+          done
+
+          # Catch any other gcp-service-account.* variant we haven't named
+          # explicitly above (e.g. .json.gz, .json.enc, .pem). Filter against a
+          # known-safe extensions allowlist so future legitimate files
+          # (gcp-service-account.example, gcp-service-account.md) can pass.
+          extra=$(git ls-files 'gcp-service-account.*' \
+            | grep -Ev '\.(example|md|txt|sample)$' || true)
+          if [ -n "$extra" ]; then
+            echo "Disallowed tracked secret-shaped file(s) detected:"
+            echo "$extra"
+            exit 1
+          fi
+
+      - name: Full lint (ruff)
+        run: uv run ruff check .
+
+      - name: Full format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Full type check (pyright)
+        run: uv run pyright
+
+      - name: Migration drift check
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Unit tests
+        env:
+          DJANGO_SETTINGS_MODULE: responsehandling.settings.test
+        run: uv run pytest tests/unit
+
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: table
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "1"

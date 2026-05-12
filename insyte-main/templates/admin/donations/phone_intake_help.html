@@ -1,0 +1,129 @@
+{% extends 'layouts/admin_layout.html' %}
+
+{% block title %}Phone Intake — Operator Playbook — DMS{% endblock %}
+
+{% block page_content %}
+<div class="max-w-4xl mx-auto space-y-8">
+
+  <!-- Page header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Phone Donation Intake — Operator Playbook</h1>
+      <p class="mt-1 text-sm text-gray-600">
+        Step-by-step reference for capturing donations over the phone.
+      </p>
+    </div>
+    <a href="{% url 'custom_admin:phone_intake_console' %}"
+       class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+      Open intake console
+    </a>
+  </div>
+
+  <!-- The five-second checklist -->
+  <section class="bg-amber-50 border border-amber-200 rounded-lg p-5">
+    <h2 class="text-base font-semibold text-amber-900">Before you pick up</h2>
+    <ul class="mt-2 text-sm text-amber-900 space-y-1 list-disc list-inside">
+      <li>Open <span class="font-mono">/admin/phone-intake/</span> and pick the campaign for this call.</li>
+      <li>Have the campaign's mandate-text card to hand for direct-debit calls.</li>
+      <li>Card calls require Stripe Elements to load — make sure the page is fully loaded before the donor reads digits.</li>
+    </ul>
+  </section>
+
+  <!-- Donor search -->
+  <section class="bg-white rounded-lg shadow p-6 space-y-3">
+    <h2 class="text-lg font-semibold text-gray-900">1. Find the donor</h2>
+    <p class="text-sm text-gray-700">
+      The search box looks across the house file and the campaign data file at the same time. You can paste any of:
+    </p>
+    <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
+      <li><span class="font-medium">URN</span> — the donor's reference number.</li>
+      <li><span class="font-medium">First or last name</span> — partial matches work.</li>
+      <li><span class="font-medium">Postcode</span> — spaces and case don't matter.</li>
+      <li><span class="font-medium">Phone number</span> — any UK format (<span class="font-mono">07700 900 123</span>, <span class="font-mono">+44 7700 900123</span>, <span class="font-mono">0044…</span>).</li>
+    </ul>
+    <div class="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-gray-700">
+      <span class="font-medium">Result badges</span> — <span class="text-blue-700">house file</span> means a confirmed donor, <span class="text-orange-700">pending review</span> means an auto-created record waiting for back-office to verify, <span class="text-purple-700">data file</span> means a donor sitting on a campaign import that hasn't been reconciled yet.
+    </div>
+    <p class="text-sm text-gray-700">
+      If the donor isn't there, click <span class="font-medium">"Create new donor"</span>. The new record is saved as <span class="font-mono">pending_review=True</span> and shows up in QA for a back-office reviewer to confirm later. Don't re-create someone you can already see — flag the duplicate to ops instead.
+    </p>
+  </section>
+
+  <!-- Donation details -->
+  <section class="bg-white rounded-lg shadow p-6 space-y-3">
+    <h2 class="text-lg font-semibold text-gray-900">2. Capture the donation</h2>
+    <p class="text-sm text-gray-700">
+      Pick the payment method first — the form changes to show only the fields that matter.
+    </p>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">Card (MOTO)</h3>
+    <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
+      <li>Type the card holder name; the donor reads the rest into Stripe Elements directly. <span class="font-medium">Never type the PAN, CVV or expiry yourself.</span></li>
+      <li>Hitting <span class="font-medium">"Charge card"</span> authorises the card now; the funds settle when QA approves the batch.</li>
+      <li>If the bank prompts SCA you'll see <span class="font-medium">"awaiting authentication"</span> — Stripe e-mails the donor a recovery link. Tell the donor to expect it.</li>
+      <li>Declined card → click <span class="font-medium">"Retry charge"</span> on the donation while the donor is still on the line. Two consecutive declines: log a <span class="font-mono">non_financial</span> donation and escalate to ops.</li>
+    </ul>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">Direct debit</h3>
+    <ul class="text-sm text-gray-700 list-disc list-inside space-y-1">
+      <li>Sort code is two-three-three with auto-tab between groups. Account number is 6-8 digits — short numbers are left-padded for you.</li>
+      <li>Read the mandate paragraph that appears on screen <span class="font-medium">verbatim</span>. Tick the "I read this aloud" box only if you actually did.</li>
+      <li>Frequency is monthly, quarterly or annually. Start date defaults to the first of next month.</li>
+      <li>If the format check fails and you're certain the donor is reading it correctly, tick <span class="font-medium">"Force save (BACS check skipped)"</span>. The donation is flagged for QA to verify.</li>
+    </ul>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">Cheque pledge</h3>
+    <p class="text-sm text-gray-700">
+      Save the donation with <span class="font-medium">cheque number and cheque date blank</span>. Banking attaches it to a Paying-In Slip when the cheque arrives in the post.
+    </p>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">Cash</h3>
+    <p class="text-sm text-gray-700">
+      Rare on phone. Same workflow as cheque. Confirm address so a receipt can be posted.
+    </p>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">CAF voucher</h3>
+    <p class="text-sm text-gray-700">
+      Read back the voucher number to the donor before saving. CAF amount is whatever the voucher is worth, not whatever the donor wanted to give.
+    </p>
+
+    <h3 class="text-sm font-semibold text-gray-900 mt-3">Postal order</h3>
+    <p class="text-sm text-gray-700">
+      Same flow as cheque pledge — number and date blank until banking sees the postal order.
+    </p>
+  </section>
+
+  <!-- Gift aid -->
+  <section class="bg-white rounded-lg shadow p-6 space-y-3">
+    <h2 class="text-lg font-semibold text-gray-900">3. Gift Aid</h2>
+    <p class="text-sm text-gray-700">
+      Tick Gift Aid only if the donor has confirmed, on this call, that they are a UK taxpayer and want to declare. If they're not sure, leave it off — they can always opt in later.
+    </p>
+  </section>
+
+  <!-- Batch -->
+  <section class="bg-white rounded-lg shadow p-6 space-y-3">
+    <h2 class="text-lg font-semibold text-gray-900">4. Daily batch</h2>
+    <p class="text-sm text-gray-700">
+      Every donation you take in a day rolls into one batch named
+      <span class="font-mono">Phone — your-username — YYYY-MM-DD — campaign-name</span>.
+      The right-hand panel shows running totals; if you switch campaigns mid-shift, a new batch opens automatically for that campaign.
+    </p>
+    <p class="text-sm text-gray-700">
+      Every phone donation enters QA as <span class="font-medium">pending</span>. Card auths held in <span class="font-medium">requires_capture</span> expire after 7 days, so QA must clear the batch the same week — auths within 24 hours of expiry trigger a notification to the QA team automatically.
+    </p>
+  </section>
+
+  <!-- What you must not do -->
+  <section class="bg-red-50 border border-red-200 rounded-lg p-5">
+    <h2 class="text-base font-semibold text-red-900">Never</h2>
+    <ul class="mt-2 text-sm text-red-900 space-y-1 list-disc list-inside">
+      <li>Type the donor's full PAN, CVV or expiry date into any field. Stripe Elements only.</li>
+      <li>Save bank details without ticking the verbatim-mandate checkbox.</li>
+      <li>Save a card donation without the donor present on the line — auth fails and the donation gets stuck.</li>
+      <li>Re-charge a failed card from the QA console. Operators retry while the donor is on the call; QA only captures or cancels.</li>
+    </ul>
+  </section>
+
+</div>
+{% endblock %}

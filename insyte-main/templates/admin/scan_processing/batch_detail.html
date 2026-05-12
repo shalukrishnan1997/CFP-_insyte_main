@@ -1,0 +1,541 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - DMS{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6" x-data="scanRetryTracker()">
+  <!-- Page Header -->
+  <div class="page-header-section flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">{{ scan_batch.batch_name }}</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        {{ scan_batch.campaign.client.name }} — {{ scan_batch.campaign.name }}
+        <span class="mx-1">&middot;</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if scan_batch.campaign.campaign_temperature == 'warm' %}bg-green-100 text-green-800{% else %}bg-amber-100 text-amber-800{% endif %}">{{ scan_batch.campaign.get_campaign_temperature_display }} Campaign</span>
+        <span class="mx-1">&middot;</span>
+        {{ scan_batch.get_payment_method_display }}
+        <span class="mx-1">&middot;</span>
+        {% if scan_batch.pages_per_donor %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">{{ scan_batch.get_scan_form_type_display }} &middot; {{ scan_batch.pages_per_donor }}p/donor</span>
+        {% else %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">{{ scan_batch.get_scan_form_type_display }}</span>
+        {% endif %}
+        {% if scan_batch.campaign.scan_purpose == 'donor_update' %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 ml-1">Donor Update</span>
+        {% endif %}
+        <span class="mx-1">&middot;</span>
+        Created {{ scan_batch.created_at|date:"d M Y H:i" }}
+        {% if scan_batch.created_by %}by {{ scan_batch.created_by.get_full_name|default:scan_batch.created_by.username }}{% endif %}
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if scan_batch.status == 'pending' %}
+      <button type="button"
+              hx-post="{% url 'custom_admin:scan_batch_process' %}"
+              hx-vals='{"scan_batch_id": "{{ scan_batch.id }}"}'
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-confirm="Process this scan batch?"
+              hx-swap="none"
+              hx-on::after-request="window.handleScanProcessResponse($event)"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        Process Batch
+      </button>
+      {% endif %}
+      
+      {% if status_counts.failed > 0 and scan_batch.status != 'processing' %}
+      <button type="button"
+              :disabled="retryingBatch"
+              @click="retryingBatch = true"
+              hx-post="{% url 'custom_admin:scan_retry_failed' %}"
+              hx-vals='{"scan_batch_id": "{{ scan_batch.id }}"}'
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-confirm="Retry all {{ status_counts.failed }} failed scans for this batch?"
+              hx-swap="none"
+              hx-on::after-request="window.handleScanRetryResponse($event); retryingBatch = false"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg x-show="!retryingBatch" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        <svg x-show="retryingBatch" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span x-text="retryingBatch ? 'Retrying...' : 'Retry Failed Scans'"></span>
+      </button>
+      {% endif %}
+      {% if scan_batch.donation_batch %}
+      <a href="{% url 'custom_admin:donation_batch_detail' client_id=scan_batch.campaign.client.id campaign_id=scan_batch.campaign.id batch_id=scan_batch.donation_batch.id %}"
+         class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors shadow-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        View Donation Batch
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+    <!-- Status -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Status</div>
+      {% if scan_batch.status == 'pending' %}
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-yellow-100 text-yellow-800 text-sm font-medium rounded-full">
+        <span class="w-2 h-2 rounded-full bg-yellow-400"></span>Pending
+      </span>
+      {% elif scan_batch.status == 'processing' %}
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Processing
+      </span>
+      {% elif scan_batch.status == 'completed' %}
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+        Completed
+      </span>
+      {% elif scan_batch.status == 'failed' %}
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 text-sm font-medium rounded-full">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+        Failed
+      </span>
+      {% endif %}
+    </div>
+
+    <!-- Progress -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Progress</div>
+      <div class="text-2xl font-bold text-gray-900">{{ scan_batch.progress_pct }}%</div>
+      <div class="mt-1 w-full bg-gray-200 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full transition-all duration-300
+          {% if scan_batch.progress_pct == 100 %}bg-green-500{% elif scan_batch.progress_pct > 0 %}bg-blue-500{% else %}bg-gray-300{% endif %}"
+          style="width: {{ scan_batch.progress_pct }}%"></div>
+      </div>
+    </div>
+
+    <!-- Total Scans -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Total Scans</div>
+      <div class="text-2xl font-bold text-gray-900">{{ scan_batch.total_scans }}</div>
+    </div>
+
+    <!-- Processed -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Processed</div>
+      <div class="text-2xl font-bold text-blue-600">{{ scan_batch.processed_scans }}</div>
+    </div>
+
+    <!-- Matched -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Matched</div>
+      <div class="text-2xl font-bold text-green-600">{{ scan_batch.matched_scans }}</div>
+    </div>
+
+    <!-- Failed -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Failed</div>
+      <div class="text-2xl font-bold text-red-600">{{ status_counts.failed|default:"0" }}</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Warm QR Issues</div>
+      <div class="text-2xl font-bold text-amber-600">{{ exception_counts.qr_unreadable_for_warm_campaign|default:"0" }}</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Warm QR Malformed</div>
+      <div class="text-2xl font-bold text-amber-600">{{ exception_counts.qr_malformed_for_warm_campaign|default:"0" }}</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">QR Malformed (Rescan)</div>
+      <div class="text-2xl font-bold text-rose-600">{{ exception_counts.qr_malformed_payload|default:"0" }}</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Rescan Under Cold</div>
+      <div class="text-2xl font-bold text-rose-600">{{ exception_counts.warm_source_miss_rescan_under_cold_campaign|default:"0" }}</div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Needs Mapping</div>
+      <div class="text-2xl font-bold text-amber-600">{{ unmapped_placeholder_count|default:"0" }}</div>
+    </div>
+  </div>
+
+  {% if unmapped_label_summary %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-5">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z" />
+      </svg>
+      <div class="min-w-0">
+        <h2 class="text-sm font-semibold text-amber-900">Unmapped OCR labels in this batch</h2>
+        <p class="mt-1 text-xs text-amber-800">
+          {{ unmapped_placeholder_count }} scanned form{{ unmapped_placeholder_count|pluralize }} contained labels that are not mapped to a donation field yet.
+          Use this summary when onboarding new donation form designs.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for item in unmapped_label_summary %}
+          <span class="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-inset ring-amber-300">
+            <span>{{ item.label }}</span>
+            <span class="text-amber-700">×{{ item.count }}</span>
+          </span>
+          {% endfor %}
+        </div>
+        <div class="mt-4 rounded-lg border border-amber-200 bg-white p-4">
+          <h3 class="text-sm font-semibold text-gray-900">Draft form_field_mapping JSON</h3>
+          <p class="mt-1 text-xs text-gray-600">
+            Replace <span class="font-mono text-amber-700">{{ mapping_draft_placeholder }}</span> with canonical field names such as <span class="font-mono">donor_name</span>, <span class="font-mono">amount</span>, <span class="font-mono">gift_aid</span>, or <span class="font-mono">postcode</span>.
+          </p>
+          <pre class="mt-3 overflow-x-auto rounded-lg bg-gray-950 px-4 py-3 text-xs leading-6 text-amber-100"><code>{{ mapping_draft_json }}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Placeholders Table -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50/50">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h2 class="text-base font-semibold text-gray-900">Scanned Forms</h2>
+        <!-- Status Filter Tabs -->
+        <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <button type="button" @click="statusFilter = 'all'"
+                  :class="statusFilter === 'all' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            All ({{ placeholders|length }})
+          </button>
+          <button type="button" @click="statusFilter = 'matched'"
+                  :class="statusFilter === 'matched' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Matched ({{ status_counts.matched|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'unmatched'"
+                  :class="statusFilter === 'unmatched' ? 'bg-white shadow-sm text-orange-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Unmatched ({{ status_counts.unmatched|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'failed'"
+                  :class="statusFilter === 'failed' ? 'bg-white shadow-sm text-red-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Failed ({{ status_counts.failed|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'pending'"
+                  :class="statusFilter === 'pending' ? 'bg-white shadow-sm text-yellow-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Pending ({{ status_counts.pending|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'needs_rescan'"
+                  :class="statusFilter === 'needs_rescan' ? 'bg-white shadow-sm text-rose-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Needs Rescan ({{ status_counts.needs_rescan|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'qr_unreadable_for_warm_campaign'"
+                  :class="statusFilter === 'qr_unreadable_for_warm_campaign' ? 'bg-white shadow-sm text-amber-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Warm QR ({{ exception_counts.qr_unreadable_for_warm_campaign|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'qr_malformed_for_warm_campaign'"
+                  :class="statusFilter === 'qr_malformed_for_warm_campaign' ? 'bg-white shadow-sm text-amber-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Warm QR Malformed ({{ exception_counts.qr_malformed_for_warm_campaign|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'qr_malformed_payload'"
+                  :class="statusFilter === 'qr_malformed_payload' ? 'bg-white shadow-sm text-rose-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            QR Malformed ({{ exception_counts.qr_malformed_payload|default:"0" }})
+          </button>
+          <button type="button" @click="statusFilter = 'warm_source_miss_rescan_under_cold_campaign'"
+                  :class="statusFilter === 'warm_source_miss_rescan_under_cold_campaign' ? 'bg-white shadow-sm text-rose-700' : 'text-gray-500 hover:text-gray-700'"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+            Rescan Under Cold ({{ exception_counts.warm_source_miss_rescan_under_cold_campaign|default:"0" }})
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {% if placeholders %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scan</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URN</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Donor</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gift Aid</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confidence</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for placeholder in placeholders %}
+          <tr class="hover:bg-gray-50 transition-colors"
+              x-show="matchesFilter('{{ placeholder.ocr_status }}', '{{ placeholder.review_exception_reason|default:'' }}')">
+            <!-- Scan Thumbnail -->
+            <td class="px-6 py-4 whitespace-nowrap">
+                <a href="{% url 'custom_admin:scan_placeholder_view' %}?id={{ placeholder.id }}"
+                 target="_blank" rel="noopener noreferrer"
+                 class="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                View Scan
+                {% if placeholder.page_keys %}
+                <span class="text-xs text-gray-400">({{ placeholder.page_keys|length }}pp)</span>
+                {% endif %}
+              </a>
+            </td>
+
+            <!-- URN -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if placeholder.urn %}
+              <span class="text-sm font-mono font-medium text-gray-900">{{ placeholder.urn }}</span>
+              {% else %}
+              <span class="text-sm text-gray-400 italic">Not detected</span>
+              {% endif %}
+            </td>
+
+            <!-- Donor Match -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if placeholder.matched_donor %}
+              <div class="text-sm text-gray-900">{{ placeholder.matched_donor.title }} {{ placeholder.matched_donor.first_name }} {{ placeholder.matched_donor.last_name }}</div>
+              {% if placeholder.ocr_status == 'unmatched' or placeholder.matched_donor.verification_status == 'pending_export' %}
+              <div class="text-xs text-amber-600 font-medium">
+                {% if placeholder.matched_donor.verification_status == 'pending_export' %}
+                New donor record (pending export)
+                {% else %}
+                New donor record (unverified)
+                {% endif %}
+              </div>
+              {% else %}
+              <div class="text-xs text-green-600 font-medium">House file match</div>
+              {% endif %}
+              {% elif placeholder.matched_data_file_donor %}
+              <div class="text-sm text-gray-900">{{ placeholder.matched_data_file_donor.title }} {{ placeholder.matched_data_file_donor.first_name }} {{ placeholder.matched_data_file_donor.last_name }}</div>
+              <div class="text-xs text-blue-600 font-medium">Data file match</div>
+              {% elif placeholder.donor_name %}
+              <div class="text-sm text-gray-900">{{ placeholder.donor_name }}</div>
+              <div class="text-xs text-orange-600 font-medium">OCR extracted (unverified)</div>
+              {% else %}
+              <span class="text-sm text-gray-400 italic">No match</span>
+              {% endif %}
+            </td>
+
+            <!-- Amount -->
+            <td class="px-6 py-4 align-top">
+              {% if placeholder.extracted_amount %}
+              <span class="text-sm font-medium text-gray-900">&pound;{{ placeholder.extracted_amount }}</span>
+              {% else %}
+              <span class="text-sm text-gray-400">&mdash;</span>
+              {% endif %}
+            </td>
+
+            <!-- Gift Aid -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if placeholder.extracted_gift_aid == True %}
+              <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                Yes
+              </span>
+              {% elif placeholder.extracted_gift_aid == False %}
+              <span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                </svg>
+                No
+              </span>
+              {% else %}
+              <span class="text-sm text-gray-400">&mdash;</span>
+              {% endif %}
+            </td>
+
+            <!-- Confidence -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if placeholder.ocr_confidence > 0 %}
+              {% widthratio placeholder.ocr_confidence 1 100 as conf_pct %}
+              <div class="flex items-center gap-2">
+                <div class="w-16 bg-gray-200 rounded-full h-1.5">
+                  <div class="h-1.5 rounded-full
+                    {% if placeholder.ocr_confidence >= 0.8 %}bg-green-500{% elif placeholder.ocr_confidence >= 0.5 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                    style="width: {{ placeholder.ocr_confidence|floatformat:0 }}%"></div>
+                </div>
+                <span class="text-xs tabular-nums
+                  {% if placeholder.ocr_confidence >= 0.8 %}text-green-600{% elif placeholder.ocr_confidence >= 0.5 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                  {% widthratio placeholder.ocr_confidence 1 100 %}%
+                </span>
+              </div>
+              {% else %}
+              <span class="text-sm text-gray-400">&mdash;</span>
+              {% endif %}
+            </td>
+
+            <!-- OCR Status -->
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if placeholder.ocr_status == 'pending' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>Pending
+              </span>
+              {% elif placeholder.ocr_status == 'processing' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                Processing
+              </span>
+              {% elif placeholder.ocr_status == 'completed' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                Completed
+              </span>
+              {% elif placeholder.ocr_status == 'matched' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                Matched
+              </span>
+              {% elif placeholder.ocr_status == 'unmatched' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                Unmatched
+              </span>
+              {% elif placeholder.ocr_status == 'skipped' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800" title="Document AI was skipped for this batch's payment method">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm2 3a1 1 0 10-2 0v3a1 1 0 102 0v-3z" clip-rule="evenodd"></path></svg>
+                OCR skipped
+              </span>
+              {% elif placeholder.ocr_status == 'needs_rescan' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800" title="Warm-campaign QR could not be matched. Rescan required.">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path></svg>
+                Needs rescan
+              </span>
+              {% elif placeholder.ocr_status == 'failed' %}
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                  Failed
+                </span>
+                <button type="button"
+                        hx-post="{% url 'custom_admin:scan_retry_single' %}"
+                        hx-vals='{"placeholder_id": "{{ placeholder.id }}"}'
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-confirm="Retry this scan?"
+                        hx-swap="none"
+                  hx-on::after-request="window.handleScanRetrySingleResponse($event)"
+                    title="Retry scan"
+                        class="p-1 text-gray-400 hover:text-orange-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                </button>
+              </div>
+              {% endif %}
+              {% if placeholder.processing_error %}
+              <p class="mt-1 max-w-sm break-words whitespace-normal text-xs {% if placeholder.ocr_status == 'failed' %}text-red-500{% else %}text-gray-600{% endif %}" title="{{ placeholder.processing_error }}">
+                {{ placeholder.processing_error }}
+              </p>
+              {% endif %}
+              {% if placeholder.review_exception_reason == 'qr_unreadable_for_warm_campaign' %}
+              <p class="mt-1 text-xs font-medium text-amber-700">Warm campaign QR was unreadable.</p>
+              {% elif placeholder.review_exception_reason == 'qr_malformed_for_warm_campaign' %}
+              <p class="mt-1 text-xs font-medium text-amber-700">Warm campaign QR sticker was detected but its payload is corrupt. Rescan this form.</p>
+              {% elif placeholder.review_exception_reason == 'qr_malformed_payload' %}
+              <p class="mt-1 text-xs font-medium text-rose-700">QR sticker detected but payload is corrupt. Rescan this form.</p>
+              {% elif placeholder.review_exception_reason == 'warm_source_miss_rescan_under_cold_campaign' %}
+              <p class="mt-1 text-xs font-medium text-rose-700">QR donor missing from configured source. Rescan under the cold campaign.</p>
+              {% endif %}
+              {% if require_manual_redaction and placeholder.redaction_status != 'completed' %}
+              <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-left max-w-sm">
+                <p class="text-xs font-medium text-amber-900 mb-1">QA redaction pending</p>
+                <p class="text-xs text-amber-800 mb-2">
+                  {% if placeholder.ocr_status == 'skipped' %}
+                  Document AI was not run for this payment method. The QA reviewer will fill fields manually and redact this scan before approval.
+                  {% else %}
+                  OCR can run before redaction now. The QA reviewer will redact this scan on the QA review screen before approval.
+                  {% endif %}
+                </p>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="px-6 py-16 text-center">
+      <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+      </svg>
+      <h3 class="mt-2 text-sm font-semibold text-gray-900">No scanned forms</h3>
+      <p class="mt-1 text-sm text-gray-500">
+        This batch has no scan placeholders yet.
+      </p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function scanRetryTracker() {
+  return {
+    statusFilter: 'all',
+    retryingBatch: false,
+    matchesFilter(status, reason) {
+      return this.statusFilter === 'all' || this.statusFilter === status || this.statusFilter === reason;
+    },
+    retryingRows: {},
+  }
+}
+
+window.handleScanActionResponse = function(event, options = {}) {
+  const xhr = event.detail.xhr;
+  const shouldReload = Boolean(options.reload);
+
+  let response = {};
+  try {
+    response = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+  } catch (error) {
+    response = {};
+  }
+
+  if (xhr.status >= 200 && xhr.status < 300 && response.success) {
+    if (window.showToast) {
+      window.showToast(response.message || 'Scan action started.', 'success');
+    }
+
+    if (shouldReload) {
+      setTimeout(() => window.location.reload(), 1500);
+    }
+    return;
+  }
+
+  if (window.showToast) {
+    window.showToast(response.error || 'Unable to complete scan action.', 'error');
+  }
+};
+
+window.handleScanProcessResponse = function(event) {
+  window.handleScanActionResponse(event, { reload: true });
+};
+
+window.handleScanRetryResponse = function(event) {
+  window.handleScanActionResponse(event, { reload: true });
+};
+
+window.handleScanRetrySingleResponse = function(event) {
+  window.handleScanActionResponse(event, { reload: true });
+};
+</script>
+{% endblock %}

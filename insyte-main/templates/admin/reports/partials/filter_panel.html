@@ -1,0 +1,112 @@
+{% load static %}
+{# Filter panel partial — loaded via HTMX when a report card is clicked #}
+<div id="filter-panel-inner"
+     x-data="filterPanel()"
+     x-cloak
+     class="bg-white rounded-xl shadow-sm border border-gray-200">
+  {% include "components/reports/filter_header.html" with portal=False %}
+
+  <!-- Filter form -->
+  <form id="reportFilterForm"
+        hx-post="{% url 'custom_admin:admin_reports_results_partial' %}"
+        hx-target="#results-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#results-loading"
+        class="p-6">
+    {% csrf_token %}
+    <input type="hidden" name="report_type" value="{{ report_type }}">
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <!-- Scope selector -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Scope</label>
+        <select name="scope" x-model="scope"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="overall">Overall</option>
+          <option value="client">By Client</option>
+          <option value="campaign">By Campaign</option>
+        </select>
+      </div>
+
+      <!-- Client dropdown (shown when scope != overall) -->
+      <div x-show="scope !== 'overall'" x-transition>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Client</label>
+        <select name="client" x-model="selectedClient"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="">All Clients</option>
+          {% for client in all_clients %}
+          <option value="{{ client.id }}" {% if client_id == client.id|stringformat:"s" %}selected{% endif %}>
+            {{ client.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Campaign dropdown (shown when scope = campaign) -->
+      <div x-show="scope === 'campaign'" x-transition>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Campaign</label>
+        <select name="campaign"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="">All Campaigns</option>
+          <template x-for="camp in filteredCampaigns" :key="camp.id">
+            <option :value="camp.id" :selected="camp.id === '{{ campaign_id }}'">
+              <span x-text="camp.name"></span>
+            </option>
+          </template>
+        </select>
+      </div>
+
+      {% include "components/reports/common_filter_fields.html" with use_uk_date_fields=True %}
+
+    </div>
+
+    <div class="mt-5 flex items-center gap-3">
+      <button type="submit"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Generate Report
+      </button>
+      <span id="results-loading" class="htmx-indicator">
+        <svg class="w-5 h-5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+      </span>
+    </div>
+  </form>
+</div>
+
+<script>
+  function filterPanel() {
+    const allCampaigns = {{ all_campaigns_json|safe }};
+    return {
+      scope: '{{ scope }}',
+      selectedClient: '{{ client_id }}',
+      get filteredCampaigns() {
+        if (!this.selectedClient) return allCampaigns;
+        return allCampaigns.filter(c => c.client_id === this.selectedClient);
+      },
+    };
+  }
+  // Initialise Flatpickr on the UK date fields loaded by this HTMX partial.
+  // Flatpickr is already on the page from reports.html extra_head.
+  (function () {
+    function initPanelDates() {
+      if (typeof flatpickr === 'undefined') return;
+      document.querySelectorAll('.uk-date-field-panel').forEach(function (input) {
+        if (input._flatpickr) input._flatpickr.destroy();
+        flatpickr(input, {
+          dateFormat: 'd/m/Y',
+          allowInput: true,
+          locale: { firstDayOfWeek: 1 },
+        });
+      });
+    }
+    // Run immediately (script executes after HTMX injects the HTML)
+    initPanelDates();
+  })();
+</script>

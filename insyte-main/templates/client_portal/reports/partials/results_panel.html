@@ -1,0 +1,191 @@
+{% load static %}
+{# Client portal — results panel partial loaded via HTMX when the filter form is submitted #}
+
+{% if error %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-6 text-sm text-red-700">
+  <strong>Error:</strong> {{ error }}
+</div>
+
+{% elif report_data is not None %}
+<div id="results-panel-inner"
+     x-data="portalResultsPanel()"
+     class="space-y-5">
+
+  {% include "components/reports/results_toolbar.html" with portal=True %}
+
+  <!-- Chart container -->
+  {% if has_visualization %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50/50 rounded-t-xl">
+      <h3 class="text-sm font-semibold text-gray-700" id="chart-title">Chart</h3>
+    </div>
+    <div class="p-4">
+      <div id="dashboard-container" style="display:none;"></div>
+      <div id="single-chart-container">
+        <div id="report-chart" style="min-height:370px;"></div>
+      </div>
+      <div id="chart-loader" class="flex items-center justify-center py-12 hidden">
+        <svg class="w-8 h-8 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% include "components/reports/results_table.html" with portal=True %}
+
+</div>
+
+{% if has_visualization %}
+<!-- ApexCharts rendering — identical rendering engine to admin reports -->
+<script>
+(function () {
+  var _reportChart = null;
+  var _dashboardCharts = [];
+  var _palette = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#F97316','#14B8A6','#6366F1','#D946EF','#84CC16'];
+  function _fmtGBP(v){return'£'+Number(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function _fmtGBPShort(v){return'£'+Number(v).toLocaleString('en-GB');}
+  function _fmtPct(v){return(+v).toFixed(1)+'%';}
+  function _toFiniteNumber(v){var n=Number(v);return Number.isFinite(n)?n:0;}
+  function _safeHorizontalHeight(categories,base,row){var count=Array.isArray(categories)?categories.length:0;return Math.max(base,Math.max(1,count)*row);}
+  function _normalizeSeries(series,type){
+    if(!Array.isArray(series)){return [];}
+    if(type==='donut'||type==='pie'){return series.map(_toFiniteNumber);}
+    return series.map(function(item){
+      if(!item||typeof item!=='object'||!Array.isArray(item.data)){return item;}
+      return Object.assign({},item,{data:item.data.map(_toFiniteNumber)});
+    });
+  }
+  function _normalizeChartPayload(raw){
+    if(!raw||typeof raw!=='object'){return null;}
+    var normalized=Object.assign({},raw);
+    normalized.series=_normalizeSeries(raw.series,raw.type);
+    if(Array.isArray(raw.categories)){normalized.categories=raw.categories.filter(function(category){return category!==null&&category!==undefined;});}
+    if(Array.isArray(raw.labels)){normalized.labels=raw.labels.filter(function(label){return label!==null&&label!==undefined;});}
+    return normalized;
+  }
+
+  function buildWidgetOptions(w,id){
+    var base={chart:{height:280,toolbar:{show:false}},colors:_palette};
+    if(w.type==='donut'||w.type==='pie'){return Object.assign({},base,{chart:Object.assign({},base.chart,{type:w.type}),series:w.series,labels:w.labels,legend:{position:'bottom',fontSize:'11px'},dataLabels:{enabled:true,formatter:_fmtPct},tooltip:{y:{formatter:function(v){return id.includes('count')?v:_fmtGBP(v);}}}});}
+    if(w.type==='area_single'){return Object.assign({},base,{chart:Object.assign({},base.chart,{type:'area'}),series:w.series,xaxis:{categories:w.categories,labels:{style:{fontSize:'10px'}}},stroke:{curve:'smooth',width:3},fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.45,opacityTo:0.05}},yaxis:{labels:{formatter:id==='trend_count'?function(v){return v;}:_fmtGBPShort,style:{fontSize:'10px'}}}});}
+    if(w.type==='bar_grouped'){return Object.assign({},base,{chart:Object.assign({},base.chart,{type:'bar'}),series:w.series,xaxis:{categories:w.categories,labels:{style:{fontSize:'10px'}}},plotOptions:{bar:{borderRadius:4,columnWidth:'55%'}},yaxis:{labels:{formatter:_fmtGBPShort}},legend:{position:'top'}});}
+    if(w.type==='bar_horizontal'){return Object.assign({},base,{chart:Object.assign({},base.chart,{type:'bar'}),series:w.series,xaxis:{categories:w.categories},plotOptions:{bar:{horizontal:true,borderRadius:4,barHeight:'60%'}},yaxis:{labels:{style:{fontSize:'11px'}}},tooltip:{y:{formatter:_fmtGBP}}});}
+    if(w.type==='bar_column'){return Object.assign({},base,{chart:Object.assign({},base.chart,{type:'bar'}),series:w.series,xaxis:{categories:w.categories},colors:['#3B82F6','#94A3B8'],plotOptions:{bar:{borderRadius:6,columnWidth:'45%',distributed:true}},yaxis:{labels:{formatter:_fmtGBPShort}},dataLabels:{enabled:true,formatter:_fmtGBPShort}});}
+    return {};
+  }
+
+  function renderReportChart(){
+    var raw=_normalizeChartPayload({{ chart_data_json|safe }});
+    if(!raw||!raw.type)return;
+    if(raw.type==='dashboard'){
+      document.getElementById('dashboard-container').style.display='';
+      var sc=document.getElementById('single-chart-container');if(sc)sc.style.display='none';
+      // Skip full dashboard rendering in portal — just render as single chart summary
+    }
+    document.getElementById('dashboard-container').style.display='none';
+    var sc2=document.getElementById('single-chart-container');if(sc2)sc2.style.display='';
+    var el=document.getElementById('report-chart');
+    var titleEl=document.getElementById('chart-title');
+    if(!el)return;
+    if(titleEl)titleEl.textContent=raw.title||'';
+    var opts={};
+    if(raw.type==='donut'){opts={chart:{type:'donut',height:370},series:raw.series,labels:raw.labels,colors:_palette,legend:{position:'right'},plotOptions:{pie:{donut:{size:'60%',labels:{show:true,total:{show:true,label:'Total',formatter:function(w){return'£'+w.globals.seriesTotals.reduce(function(a,b){return a+b},0).toLocaleString('en-GB',{minimumFractionDigits:2});}}}}}},dataLabels:{enabled:(raw.labels||[]).length<=20,formatter:function(v){return(+v).toFixed(1)+'%';}},tooltip:{y:{formatter:_fmtGBP}}};}
+    else if(raw.type==='pie'){opts={chart:{type:'pie',height:370},series:raw.series,labels:raw.labels,colors:_palette,legend:{position:'right'},dataLabels:{enabled:(raw.labels||[]).length<=20,formatter:function(v){return(+v).toFixed(1)+'%';}},tooltip:{y:{formatter:_fmtGBP}}};}
+    else if(raw.type==='bar'){opts={chart:{type:'bar',height:370,toolbar:{show:true}},series:raw.series,xaxis:{categories:raw.categories,labels:{rotate:-45,style:{fontSize:'11px'}}},colors:_palette,plotOptions:{bar:{borderRadius:4,columnWidth:'55%'}},dataLabels:{enabled:false},yaxis:{labels:{formatter:_fmtGBPShort}},tooltip:{y:{formatter:_fmtGBP}},grid:{borderColor:'#f1f5f9'}};}
+    else if(raw.type==='bar_horizontal'){opts={chart:{type:'bar',height:_safeHorizontalHeight(raw.categories,370,40),toolbar:{show:true}},series:raw.series,xaxis:{labels:{formatter:_fmtGBPShort}},yaxis:{categories:raw.categories},colors:['#3B82F6','#94A3B8'],plotOptions:{bar:{horizontal:true,borderRadius:4,barHeight:'55%'}},dataLabels:{enabled:false},tooltip:{y:{formatter:_fmtGBP}},legend:{position:'top'},grid:{borderColor:'#f1f5f9'}};}
+    else if(raw.type==='bar_stacked'){opts={chart:{type:'bar',height:370,stacked:true,toolbar:{show:true}},series:raw.series,xaxis:{categories:raw.categories,labels:{rotate:-45,style:{fontSize:'11px'}}},colors:['#10B981','#F59E0B'],plotOptions:{bar:{borderRadius:4,columnWidth:'60%'}},dataLabels:{enabled:false},yaxis:{labels:{formatter:_fmtGBPShort}},tooltip:{y:{formatter:_fmtGBP}},legend:{position:'top'},grid:{borderColor:'#f1f5f9'}};}
+    else if(raw.type==='area'){opts={chart:{type:'area',height:370,toolbar:{show:true},zoom:{enabled:true}},series:raw.series,xaxis:{categories:raw.categories,labels:{rotate:-45,style:{fontSize:'11px'}}},colors:['#3B82F6','#10B981'],stroke:{curve:'smooth',width:2},fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.4,opacityTo:0.05}},dataLabels:{enabled:false},yaxis:[{title:{text:'Amount (£)'},labels:{formatter:_fmtGBPShort}},{opposite:true,title:{text:'Count'},labels:{formatter:function(v){return Math.round(v);}}}],tooltip:{shared:true},legend:{position:'top'},grid:{borderColor:'#f1f5f9'}};}
+    else if(raw.type==='line'){opts={chart:{type:'line',height:370,toolbar:{show:true},zoom:{enabled:true}},series:raw.series,xaxis:{categories:raw.categories,labels:{rotate:-45,style:{fontSize:'11px'}}},colors:_palette,stroke:{curve:'smooth',width:3},markers:{size:4},dataLabels:{enabled:false},yaxis:{labels:{formatter:_fmtGBPShort}},tooltip:{y:{formatter:_fmtGBP}},grid:{borderColor:'#f1f5f9'}};}
+    if(!opts.chart)return;
+    if(_reportChart){_reportChart.destroy();}
+    _reportChart=new ApexCharts(el,opts);
+    _reportChart.render();
+    window._currentReportChart=_reportChart;
+  }
+
+  function renderReportChartWithLoader(){
+    var l=document.getElementById('chart-loader');if(l)l.classList.remove('hidden');
+    setTimeout(function(){
+      try{renderReportChart();}catch(e){console.error(e);}finally{if(l)l.classList.add('hidden');}
+    },100);
+  }
+
+  window.portalRenderReportChart = renderReportChartWithLoader;
+
+  if(!window._portalReportChartAfterSettleBound){
+    document.body.addEventListener('htmx:afterSettle',function(e){
+      if(e.detail.target&&e.detail.target.id==='results-panel'&&typeof window.portalRenderReportChart==='function'){
+        window.portalRenderReportChart();
+      }
+    });
+    window._portalReportChartAfterSettleBound=true;
+  }
+
+  renderReportChartWithLoader();
+})();
+</script>
+{% endif %}
+
+<script>
+function portalResultsPanel() {
+  return {
+    pdfLoading: false,
+    exportPDF() {
+      var chart = window._currentReportChart;
+      this.pdfLoading = true;
+      var self = this;
+      if (chart) {
+        chart.dataURI().then(function(uri) {
+          self._postPDF(uri.imgURI || '');
+        }).catch(function() {
+          self._postPDF('');
+        });
+      } else {
+        this._postPDF('');
+      }
+    },
+    _postPDF(chartImageB64) {
+      var self = this;
+      fetch('{% url "client_portal:report_export_pdf" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+        },
+        body: JSON.stringify({
+          report_type: '{{ report_type }}',
+          chart_image_b64: chartImageB64,
+          campaign_id: '{{ campaign_id }}',
+          date_from: '{{ date_from|date:"Y-m-d" }}',
+          date_to: '{{ date_to|date:"Y-m-d" }}',
+        }),
+      })
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '{{ report_type }}_report.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+        self.pdfLoading = false;
+      })
+      .catch(function() { self.pdfLoading = false; });
+    },
+  };
+}
+</script>
+
+{% else %}
+<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center text-gray-400">
+  <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+      d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+  </svg>
+  <p class="text-sm font-medium">No data found for the selected filters.</p>
+  <p class="text-xs mt-1">Try adjusting your date range or campaign selection.</p>
+</div>
+{% endif %}

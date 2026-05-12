@@ -1,0 +1,121 @@
+{% extends 'layouts/admin_layout.html' %}
+
+{% block title %}Phone Donation Intake — Select Campaign — DMS{% endblock %}
+
+{% block page_content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Phone Donation Intake</h1>
+    <p class="mt-1 text-sm text-gray-600">Pick the campaign this call is for. Choose a client first to narrow the list. The console opens once you choose.</p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-4 space-y-4">
+    <div>
+      <label for="clientSelect" class="block text-sm font-medium text-gray-700 mb-1">Client</label>
+      <select id="clientSelect"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+              aria-controls="campaignList">
+        <option value="">Select a client…</option>
+        {% for client in clients %}
+          <option value="{{ client.id }}">{{ client.name }}</option>
+        {% empty %}
+          <option value="" disabled>No clients with active campaigns</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <h2 class="block text-sm font-medium text-gray-700 mb-1">Active campaigns</h2>
+      <div id="campaignList"
+           class="rounded-md border border-gray-200 divide-y"
+           aria-live="polite">
+        <p class="p-4 text-sm text-gray-500 italic">Select a client to see active campaigns.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const campaignsApiUrl = '{% url "custom_admin:campaigns_by_client_api" %}';
+  const consoleUrl = '{% url "custom_admin:phone_intake_console" %}';
+  const clientSelect = document.getElementById('clientSelect');
+  const campaignList = document.getElementById('campaignList');
+  // Monotonic counter so a slow earlier fetch can't overwrite a fresh one
+  // when the operator switches client quickly.
+  let fetchToken = 0;
+
+  function setMessage(text) {
+    campaignList.replaceChildren();
+    const p = document.createElement('p');
+    p.className = 'p-4 text-sm text-gray-500 italic';
+    p.textContent = text;
+    campaignList.appendChild(p);
+  }
+
+  function renderCampaigns(campaigns) {
+    if (campaigns.length === 0) {
+      setMessage('No active campaigns for this client.');
+      return;
+    }
+    campaignList.replaceChildren();
+    campaigns.forEach(campaign => {
+      const url = new URL(consoleUrl, window.location.origin);
+      url.searchParams.set('campaign_id', campaign.id);
+      const a = document.createElement('a');
+      a.href = url.pathname + url.search;
+      a.className = 'block p-4 hover:bg-gray-50 transition-colors';
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between';
+      const name = document.createElement('div');
+      name.className = 'font-medium text-gray-900';
+      name.textContent = campaign.name;
+      row.appendChild(name);
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      arrow.setAttribute('class', 'w-5 h-5 text-gray-400');
+      arrow.setAttribute('fill', 'none');
+      arrow.setAttribute('stroke', 'currentColor');
+      arrow.setAttribute('viewBox', '0 0 24 24');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('d', 'M9 5l7 7-7 7');
+      arrow.appendChild(path);
+      row.appendChild(arrow);
+      a.appendChild(row);
+      campaignList.appendChild(a);
+    });
+  }
+
+  function loadCampaigns() {
+    const clientId = clientSelect.value;
+    const myToken = ++fetchToken;
+    if (!clientId) {
+      setMessage('Select a client to see active campaigns.');
+      return;
+    }
+    setMessage('Loading…');
+    const url = new URL(campaignsApiUrl, window.location.origin);
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('status', 'active');
+    fetch(url, { credentials: 'same-origin' })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (myToken !== fetchToken) return;
+        renderCampaigns(data.campaigns || []);
+      })
+      .catch(error => {
+        if (myToken !== fetchToken) return;
+        console.error('Error loading campaigns:', error);
+        setMessage('Could not load campaigns. Please try again.');
+      });
+  }
+
+  clientSelect.addEventListener('change', loadCampaigns);
+</script>
+{% endblock %}

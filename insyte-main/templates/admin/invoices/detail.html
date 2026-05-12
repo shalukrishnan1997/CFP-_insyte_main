@@ -1,0 +1,672 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6" x-data="{ activeTab: 'preview', showPaymentModal: false, showStatusModal: false, selectedStatus: '{{ invoice.status }}' }">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Invoice {{ invoice.invoice_number }}</h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    {{ invoice.client.name }} • {{ invoice.billing_period_start|date:"d M Y" }} - {{ invoice.billing_period_end|date:"d M Y" }}
+                </p>
+            </div>
+            <div class="flex gap-3">
+                <a href="{% url 'custom_admin:invoice_list' %}" 
+                   class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    ← Back to List
+                </a>
+                <a href="{% url 'custom_admin:invoice_preview_pdf' invoice.id %}" 
+                   target="_blank"
+                   class="px-4 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                    Preview PDF
+                </a>
+                <a href="{% url 'custom_admin:invoice_edit' invoice.id %}" 
+                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Edit Invoice
+                </a>
+                <a href="{% url 'custom_admin:invoice_generate_pdf' invoice.id %}"
+                   hx-boost="false"
+                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Download PDF
+                </a>
+                <a href="{% url 'custom_admin:invoice_send_email' invoice.id %}"
+                   class="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    Send by Email
+                </a>
+                <!-- Actions Dropdown -->
+                <div class="relative" x-data="{ open: false }">
+                    <button type="button" @click="open = !open" 
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center">
+                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                        </svg>
+                        Actions
+                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div x-show="open" @click.away="open = false" x-transition
+                         class="workspace-dropdown absolute right-0 mt-2 w-48 z-50">
+                        <div class="py-1">
+                            <p class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Change Status</p>
+                            <button type="button" @click="selectedStatus = 'draft'; showStatusModal = true; open = false"
+                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'draft' %}bg-gray-100 font-semibold{% endif %}">
+                                <span class="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2"></span>Draft
+                            </button>
+                            <button type="button" @click="selectedStatus = 'issued'; showStatusModal = true; open = false"
+                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'issued' %}bg-gray-100 font-semibold{% endif %}">
+                                <span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-2"></span>Issued
+                            </button>
+                            <button type="button" @click="selectedStatus = 'paid'; showPaymentModal = true; open = false"
+                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'paid' %}bg-gray-100 font-semibold{% endif %}">
+                                <span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span>Paid
+                            </button>
+                            <button type="button" @click="selectedStatus = 'overdue'; showStatusModal = true; open = false"
+                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'overdue' %}bg-gray-100 font-semibold{% endif %}">
+                                <span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-2"></span>Overdue
+                            </button>
+                            <button type="button" @click="selectedStatus = 'cancelled'; showStatusModal = true; open = false"
+                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'cancelled' %}bg-gray-100 font-semibold{% endif %}">
+                                <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-2"></span>Cancelled
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Banner -->
+    <div class="rounded-md p-4 flex items-center justify-between
+        {% if invoice.status == 'draft' %}bg-gray-100 border-2 border-gray-300
+        {% elif invoice.status == 'issued' %}bg-blue-50 border-2 border-blue-300
+        {% elif invoice.status == 'paid' %}bg-green-50 border-2 border-green-300
+        {% elif invoice.status == 'overdue' %}bg-red-50 border-2 border-red-300
+        {% elif invoice.status == 'cancelled' %}bg-yellow-50 border-2 border-yellow-300
+        {% endif %}">
+        <div class="flex items-center">
+            <span class="px-4 py-2 text-lg font-bold rounded-full
+                {% if invoice.status == 'draft' %}bg-gray-200 text-gray-800
+                {% elif invoice.status == 'issued' %}bg-blue-200 text-blue-800
+                {% elif invoice.status == 'paid' %}bg-green-200 text-green-800
+                {% elif invoice.status == 'overdue' %}bg-red-200 text-red-800
+                {% elif invoice.status == 'cancelled' %}bg-yellow-200 text-yellow-800
+                {% endif %}">
+                {{ invoice.get_status_display|upper }}
+            </span>
+            <div class="ml-4">
+                <p class="font-medium text-gray-900">Total: £{{ invoice.total_amount|floatformat:2 }}</p>
+                {% if invoice.balance_due > 0 %}
+                <p class="text-sm {% if invoice.status == 'overdue' %}text-red-600{% else %}text-gray-600{% endif %}">
+                    Balance Due: £{{ invoice.balance_due|floatformat:2 }}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-sm text-gray-600">Issue Date: {{ invoice.issue_date|date:"d F Y" }}</p>
+            <p class="text-sm {% if invoice.status == 'overdue' %}text-red-600 font-bold{% else %}text-gray-600{% endif %}">
+                Due Date: {{ invoice.due_date|date:"d F Y" }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button type="button" @click="activeTab = 'preview'"
+                    :class="activeTab === 'preview' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Invoice Preview
+            </button>
+            <button type="button" @click="activeTab = 'metrics'"
+                    :class="activeTab === 'metrics' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Service Metrics
+            </button>
+            <button type="button" @click="activeTab = 'details'"
+                    :class="activeTab === 'details' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Details & Notes
+            </button>
+        </nav>
+    </div>
+
+    <!-- Invoice Preview Tab (Visual Invoice) -->
+    <div x-show="activeTab === 'preview'" x-cloak>
+        <div class="bg-white rounded-md max-w-4xl mx-auto overflow-hidden font-sans">
+            <!-- Invoice Header -->
+            <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-8">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-4xl font-bold mb-2">INVOICE</h2>
+                        <p class="text-blue-200 text-lg">{{ invoice.invoice_number }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-blue-200 text-sm">Issue Date</p>
+                        <p class="text-xl font-semibold">{{ invoice.issue_date|date:"d M Y" }}</p>
+                        <p class="text-blue-200 text-sm mt-2">Due Date</p>
+                        <p class="text-xl font-semibold">{{ invoice.due_date|date:"d M Y" }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bill To Section -->
+            <div class="p-8 bg-gray-50 border-b">
+                <div class="grid grid-cols-2 gap-8">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bill To</p>
+                        <p class="text-xl font-bold text-gray-900">{{ invoice.client.name }}</p>
+                        {% if invoice.client.email %}
+                        <p class="text-gray-600">{{ invoice.client.email }}</p>
+                        {% endif %}
+                        {% if invoice.client.phone %}
+                        <p class="text-gray-600">{{ invoice.client.phone }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Billing Period</p>
+                        <p class="text-lg font-semibold text-gray-900">
+                            {{ invoice.billing_period_start|date:"d M Y" }} - {{ invoice.billing_period_end|date:"d M Y" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Line Items -->
+            <div class="p-8">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200">
+                            <th class="text-left py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                            <th class="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Qty</th>
+                            <th class="text-right py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Unit Price</th>
+                            <th class="text-right py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% if has_selected_services %}
+                            {# Show ALL selected services from session (181+ services) #}
+                            {% for description, qty, unit_price, line_total in selected_services %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="py-4">
+                                    <p class="font-medium text-gray-900">{{ description }}</p>
+                                </td>
+                                <td class="py-4 text-center text-gray-600">{{ qty }}</td>
+                                <td class="py-4 px-4 text-right text-gray-600">£{{ unit_price|floatformat:2 }}</td>
+                                <td class="py-4 px-4 text-right font-medium text-gray-900">£{{ line_total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            {# Fallback for old invoices without service selection #}
+                            {% if invoice.total_donations_captured > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Donation Capture Service</p>
+                                <p class="text-xs text-gray-500">Processing of donation records</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">{{ invoice.total_donations_captured }}</td>
+                            <td class="py-4 text-right text-gray-600">£{{ settings.price_per_donation|floatformat:4 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ donation_line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+
+                        {% if invoice.gift_aid_captured > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Gift Aid Processing</p>
+                                <p class="text-xs text-gray-500">Gift aid declarations (£{{ invoice.gift_aid_amount|floatformat:2 }})</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">{{ invoice.gift_aid_captured }}</td>
+                            <td class="py-4 text-right text-gray-600">£{{ settings.price_per_gift_aid|floatformat:4 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ gift_aid_line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+
+                        {% if invoice.letters_generated > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Letter Generation</p>
+                                <p class="text-xs text-gray-500">Thank you letters</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">{{ invoice.letters_generated }}</td>
+                            <td class="py-4 text-right text-gray-600">£{{ settings.price_per_letter|floatformat:4 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ letter_line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+
+                        {% if invoice.campaigns_created > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Campaign Setup</p>
+                                <p class="text-xs text-gray-500">New campaign configuration</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">{{ invoice.campaigns_created }}</td>
+                            <td class="py-4 text-right text-gray-600">£{{ settings.price_per_campaign|floatformat:4 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ campaign_line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+
+                        {% if invoice.batch_operations_completed > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Batch Processing</p>
+                                <p class="text-xs text-gray-500">Bulk data operations</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">{{ invoice.batch_operations_completed }}</td>
+                            <td class="py-4 text-right text-gray-600">£{{ settings.price_per_batch|floatformat:4 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ batch_line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+
+                        {% if invoice.service_fee > 0 %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-4">
+                                <p class="font-medium text-gray-900">Service Fee</p>
+                                <p class="text-xs text-gray-500">Platform access and support</p>
+                            </td>
+                            <td class="py-4 text-center text-gray-600">1</td>
+                            <td class="py-4 text-right text-gray-600">£{{ invoice.service_fee|floatformat:2 }}</td>
+                            <td class="py-4 text-right font-medium text-gray-900">£{{ invoice.service_fee|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endif %} {# End of has_selected_services check #}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Summary Footer -->
+            <div class="bg-gray-50 p-8 border-t">
+                <div class="flex justify-end">
+                    <div class="w-80">
+                        <div class="flex justify-between py-2 border-b border-gray-200">
+                            <span class="text-gray-600">Subtotal</span>
+                            <span class="font-medium text-gray-900">£{{ invoice.subtotal|floatformat:2 }}</span>
+                        </div>
+                        {% if invoice.discount_amount > 0 %}
+                        <div class="flex justify-between py-2 border-b border-gray-200 text-green-600">
+                            <span>Discount</span>
+                            <span>-£{{ invoice.discount_amount|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                        {% if invoice.tax_rate > 0 %}
+                        <div class="flex justify-between py-2 border-b border-gray-200">
+                            <span class="text-gray-600">VAT ({{ invoice.tax_rate|floatformat:1 }}%)</span>
+                            <span class="font-medium text-gray-900">£{{ invoice.tax_amount|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="flex justify-between py-4 bg-blue-600 text-white rounded-md px-4 mt-4">
+                            <span class="text-lg font-bold">TOTAL</span>
+                            <span class="text-xl font-bold">£{{ invoice.total_amount|floatformat:2 }}</span>
+                        </div>
+                        {% if invoice.balance_due > 0 %}
+                        <div class="flex justify-between py-3 bg-amber-100 text-amber-800 rounded-md px-4 mt-2">
+                            <span class="font-bold">Balance Due</span>
+                            <span class="font-bold">£{{ invoice.balance_due|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Metrics Tab -->
+    <div x-show="activeTab === 'metrics'" x-cloak>
+        <div class="workspace-panel p-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-6">Service Metrics Summary</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-blue-50 rounded-md p-4">
+                    <p class="text-sm text-blue-600 mb-1">Donations Captured</p>
+                    <p class="text-3xl font-bold text-blue-900">{{ invoice.total_donations_captured }}</p>
+                    <p class="text-sm text-blue-600 font-medium">£{{ invoice.total_donation_amount|floatformat:2 }} total</p>
+                </div>
+                
+                <div class="bg-green-50 rounded-md p-4">
+                    <p class="text-sm text-green-600 mb-1">Gift Aid Captured</p>
+                    <p class="text-3xl font-bold text-green-900">{{ invoice.gift_aid_captured }}</p>
+                    <p class="text-sm text-green-600 font-medium">£{{ invoice.gift_aid_amount|floatformat:2 }} value</p>
+                </div>
+                
+                <div class="bg-purple-50 rounded-md p-4">
+                    <p class="text-sm text-purple-600 mb-1">Letters Generated</p>
+                    <p class="text-3xl font-bold text-purple-900">{{ invoice.letters_generated }}</p>
+                </div>
+                
+                <div class="bg-yellow-50 rounded-md p-4">
+                    <p class="text-sm text-yellow-600 mb-1">Campaigns Created</p>
+                    <p class="text-3xl font-bold text-yellow-900">{{ invoice.campaigns_created }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-red-50 rounded-md p-4">
+                    <p class="text-sm text-red-600 mb-1">HGV Identified</p>
+                    <p class="text-3xl font-bold text-red-900">{{ invoice.hgv_identified }}</p>
+                    <p class="text-xs text-red-500">High Value ≥£1000</p>
+                </div>
+                
+                <div class="bg-orange-50 rounded-md p-4">
+                    <p class="text-sm text-orange-600 mb-1">LGV Identified</p>
+                    <p class="text-3xl font-bold text-orange-900">{{ invoice.lgv_identified }}</p>
+                    <p class="text-xs text-orange-500">Low Value &lt;£50</p>
+                </div>
+                
+                <div class="bg-indigo-50 rounded-md p-4">
+                    <p class="text-sm text-indigo-600 mb-1">Batches Processed</p>
+                    <p class="text-3xl font-bold text-indigo-900">{{ invoice.batch_operations_completed }}</p>
+                </div>
+                
+                <div class="bg-pink-50 rounded-md p-4">
+                    <p class="text-sm text-pink-600 mb-1">Notifications Sent</p>
+                    <p class="text-3xl font-bold text-pink-900">{{ invoice.donor_notifications_sent }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-cyan-50 rounded-md p-4">
+                    <p class="text-sm text-cyan-600 mb-1">Data Files</p>
+                    <p class="text-3xl font-bold text-cyan-900">{{ invoice.data_files_processed }}</p>
+                </div>
+                
+                <div class="bg-teal-50 rounded-md p-4">
+                    <p class="text-sm text-teal-600 mb-1">Reports Generated</p>
+                    <p class="text-3xl font-bold text-teal-900">{{ invoice.reports_generated }}</p>
+                </div>
+                
+                <div class="bg-lime-50 rounded-md p-4">
+                    <p class="text-sm text-lime-600 mb-1">Templates Created</p>
+                    <p class="text-3xl font-bold text-lime-900">{{ invoice.templates_created }}</p>
+                </div>
+                
+                <div class="bg-amber-50 rounded-md p-4">
+                    <p class="text-sm text-amber-600 mb-1">Donors Added</p>
+                    <p class="text-3xl font-bold text-amber-900">{{ invoice.donors_added }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details & Notes Tab -->
+    <div x-show="activeTab === 'details'" x-cloak class="space-y-6">
+        <!-- Payment Information -->
+        {% if invoice.payment_date %}
+        <div class="bg-green-50 rounded-md p-6 border border-green-200">
+            <h3 class="text-lg font-bold text-green-900 mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                Payment Received
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <p class="text-sm text-green-700 font-medium">Payment Date</p>
+                    <p class="text-lg font-semibold text-green-900">{{ invoice.payment_date|date:"d F Y" }}</p>
+                </div>
+                {% if invoice.payment_method %}
+                <div>
+                    <p class="text-sm text-green-700 font-medium">Payment Method</p>
+                    <p class="text-lg font-semibold text-green-900">{{ invoice.get_payment_method_display }}</p>
+                </div>
+                {% endif %}
+                {% if invoice.payment_reference %}
+                <div>
+                    <p class="text-sm text-green-700 font-medium">Payment Reference</p>
+                    <p class="text-lg font-semibold text-green-900">{{ invoice.payment_reference }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Notes and Terms -->
+        <div class="workspace-panel p-6">
+            {% if invoice.notes %}
+            <div class="mb-6">
+                <h3 class="text-lg font-bold text-gray-900 mb-3">Notes</h3>
+                <p class="text-gray-700 whitespace-pre-line bg-gray-50 p-4 rounded-md">{{ invoice.notes }}</p>
+            </div>
+            {% endif %}
+            
+            {% if invoice.terms_and_conditions %}
+            <div>
+                <h3 class="text-lg font-bold text-gray-900 mb-3">Terms & Conditions</h3>
+                <p class="text-sm text-gray-600 whitespace-pre-line bg-gray-50 p-4 rounded-md">{{ invoice.terms_and_conditions }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Audit Information -->
+        <div class="bg-gray-50 rounded-md p-6 border border-gray-200">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Audit Trail</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="text-gray-600">Created By:</span>
+                    <span class="font-medium text-gray-900 ml-2">
+                        {% if invoice.created_by %}{{ invoice.created_by.get_full_name|default:invoice.created_by.username }}{% else %}System{% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-gray-600">Created At:</span>
+                    <span class="font-medium text-gray-900 ml-2">{{ invoice.created_at|date:"d M Y H:i" }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-600">Last Updated:</span>
+                    <span class="font-medium text-gray-900 ml-2">{{ invoice.updated_at|date:"d M Y H:i" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div x-show="showPaymentModal" 
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto" 
+     style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="relative bg-white rounded-md max-w-md w-full p-6 border border-gray-200" 
+             @click.away="showPaymentModal = false">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-900">Mark Invoice as Paid</h3>
+                <button type="button" @click="showPaymentModal = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form method="POST" action="{% url 'custom_admin:invoice_mark_paid' invoice.id %}">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Amount Paid</label>
+                        <div class="mt-1 relative rounded-md">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-sm">£</span>
+                            </div>
+                            <input type="number" name="amount" step="0.01" 
+                                   value="{{ invoice.total_amount }}"
+                                   class="focus:ring-green-500 focus:border-green-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Payment Method</label>
+                        <select name="payment_method" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <option value="credit_card">Credit Card</option>
+                            <option value="debit_card">Debit Card</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="cash">Cash</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Payment Reference</label>
+                        <input type="text" name="payment_reference" 
+                               placeholder="e.g., Transaction ID, Cheque number"
+                               class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Payment Date</label>
+                        <input type="date" name="payment_date" 
+                               value="{{ 'now'|date:'Y-m-d' }}"
+                               class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="showPaymentModal = false"
+                            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700">
+                        Confirm Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Status Change Modal (for non-paid status changes) -->
+<div x-show="showStatusModal" 
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto" 
+     style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="relative bg-white rounded-md max-w-md w-full p-6 border border-gray-200" 
+             @click.away="showStatusModal = false">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-900">Change Invoice Status</h3>
+                <button type="button" @click="showStatusModal = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form method="POST" action="{% url 'custom_admin:invoice_change_status' invoice.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" :value="selectedStatus">
+                
+                <div class="mb-6">
+                    <p class="text-sm text-gray-600 mb-4">
+                        You are about to change the invoice status from 
+                        <span class="font-semibold">{{ invoice.get_status_display }}</span> to 
+                        <span class="font-semibold" x-text="selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)"></span>.
+                    </p>
+                    
+                    <div class="p-4 rounded-md"
+                         :class="{
+                             'bg-gray-100': selectedStatus === 'draft',
+                             'bg-blue-100': selectedStatus === 'issued',
+                             'bg-red-100': selectedStatus === 'overdue',
+                             'bg-yellow-100': selectedStatus === 'cancelled'
+                         }">
+                        <p class="text-sm font-medium"
+                           :class="{
+                               'text-gray-800': selectedStatus === 'draft',
+                               'text-blue-800': selectedStatus === 'issued',
+                               'text-red-800': selectedStatus === 'overdue',
+                               'text-yellow-800': selectedStatus === 'cancelled'
+                           }">
+                            <span x-show="selectedStatus === 'draft'">Draft invoices can still be edited before sending to the client.</span>
+                            <span x-show="selectedStatus === 'issued'">Issued invoices have been sent to the client and are awaiting payment.</span>
+                            <span x-show="selectedStatus === 'overdue'">Mark this invoice as overdue if payment is past the due date.</span>
+                            <span x-show="selectedStatus === 'cancelled'">Cancelled invoices will not be included in financial reports.</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button type="button" @click="showStatusModal = false"
+                            class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-white rounded-md"
+                            :class="{
+                                'bg-gray-600 hover:bg-gray-700': selectedStatus === 'draft',
+                                'bg-blue-600 hover:bg-blue-700': selectedStatus === 'issued',
+                                'bg-red-600 hover:bg-red-700': selectedStatus === 'overdue',
+                                'bg-yellow-600 hover:bg-yellow-700': selectedStatus === 'cancelled'
+                            }">
+                        Confirm Status Change
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  (() => {
+    function initializeInvoiceDetailPage(root = document) {
+      const paymentDateField = root.querySelector('input[name="payment_date"]');
+      if (
+        paymentDateField
+        && typeof flatpickr !== 'undefined'
+        && paymentDateField.dataset.flatpickrInitialized !== 'true'
+      ) {
+        flatpickr(paymentDateField, {
+          dateFormat: "d/m/Y",
+          altInput: true,
+          altFormat: "d/m/Y",
+          allowInput: true
+        });
+        paymentDateField.dataset.flatpickrInitialized = 'true';
+      }
+    }
+
+    if (!window.__invoiceDetailInitBound) {
+      document.body.addEventListener('htmx:load', function (event) {
+        initializeInvoiceDetailPage(event.target);
+      });
+      window.__invoiceDetailInitBound = true;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function handleInvoiceDetailReady() {
+        initializeInvoiceDetailPage(document);
+      }, { once: true });
+    } else {
+      initializeInvoiceDetailPage(document);
+    }
+  })();
+</script>
+{% endblock %}

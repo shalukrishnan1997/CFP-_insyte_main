@@ -1,0 +1,5 @@
+tools:
+    - dartanalyzer@3.7.2
+    - eslint@8.57.0
+    - lizard@1.17.31
+2

@@ -1,0 +1,702 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Create Campaign - DMS{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Page Header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <nav class="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
+        <a href="{% url 'custom_admin:admin_campaigns' %}" class="hover:text-blue-600 transition-colors">Campaigns</a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        <span class="text-gray-900 font-medium">Create New Campaign</span>
+      </nav>
+      <h1 class="text-2xl font-bold text-gray-900">Create New Campaign</h1>
+      <p class="mt-1 text-sm text-gray-500">Default fields (Name, Email, Phone, Amount, Date, Payment Method) are added automatically.</p>
+    </div>
+  <form method="post" id="campaignForm" class="space-y-6">
+    {% csrf_token %}
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 1 — CAMPAIGN IDENTITY
+    ════════════════════════════════════════════════ -->
+    <div class="workspace-panel overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <span class="w-1 h-6 rounded-full bg-blue-600 shrink-0"></span>
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Campaign Identity</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Core campaign details and appeal information</p>
+        </div>
+        <span class="ml-auto text-xs text-gray-400 font-medium">Step 1 of 5</span>
+      </div>
+      <div class="p-6 space-y-5">
+
+        <!-- Row 1: Title + Client -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Campaign Title <span class="text-red-500">*</span></label>
+            <input name="title" required placeholder="e.g. Winter Appeal 2025"
+                   class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Client / Charity <span class="text-red-500">*</span></label>
+            <div x-data="{
+                 open: false,
+                 value: '',
+                 get selectedText() {
+                     if (!this.value) return 'Select a client…';
+                 let el = this.$refs.select.querySelector(`option[value='${this.value}']`);
+                     return el ? el.text : 'Select a client…';
+                 }
+             }" class="relative" @click.outside="open = false">
+              <select x-ref="select" name="client_id" x-model="value" class="hidden">
+                <option value="">Select a client…</option>
+                {% for client in clients %}
+                <option value="{{ client.id }}">{{ client.name }}</option>
+                {% endfor %}
+              </select>
+              <button type="button" @click="open = !open"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <span class="flex items-center gap-2 truncate">
+                  <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                  </svg>
+                  <span x-text="selectedText" class="truncate"></span>
+                </span>
+                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              <div x-show="open"
+                   x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                   x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                   x-cloak class="workspace-dropdown absolute z-50 w-full mt-1 max-h-56 overflow-y-auto py-1">
+                <button type="button" @click="value = ''; open = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors"
+                        :class="value === '' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'">
+                  <span>Select a client…</span>
+                </button>
+                {% for client in clients %}
+                <button type="button" @click="value = '{{ client.id }}'; open = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors"
+                        :class="value === '{{ client.id }}' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'">
+                  <span class="truncate">{{ client.name }}</span>
+                  <svg x-show="value === '{{ client.id }}'" class="w-4 h-4 text-blue-600 shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Appeal Code + Appeal Type -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Appeal Code <span class="text-red-500">*</span></label>
+            <input name="appeal_code" required placeholder="e.g. WINT25"
+                   class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow uppercase">
+            <p class="mt-1 text-xs text-gray-400">Short unique code for this appeal (auto-uppercased)</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Appeal Type <span class="text-red-500">*</span></label>
+            <div x-data="{
+                 open: false,
+                 value: 'Donation',
+                 get selectedText() {
+                 let el = this.$refs.select.querySelector(`option[value='${this.value}']`);
+                     return el ? el.text : 'Donation';
+                 }
+             }" class="relative" @click.outside="open = false">
+              <select x-ref="select" name="appeal_type" x-model="value" class="hidden">
+                <option value="Donation">Donation</option>
+                <option value="Raffle">Raffle</option>
+              </select>
+              <button type="button" @click="open = !open"
+                      class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                  </svg>
+                  <span x-text="selectedText"></span>
+                </span>
+                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              <div x-show="open"
+                   x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                   x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                   x-cloak class="workspace-dropdown absolute z-50 w-full mt-1 py-1">
+                <button type="button" @click="value = 'Donation'; open = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors"
+                        :class="value === 'Donation' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'">
+                  <span>Donation</span>
+                  <svg x-show="value === 'Donation'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+                <button type="button" @click="value = 'Raffle'; open = false"
+                        class="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition-colors"
+                        :class="value === 'Raffle' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'">
+                  <span>Raffle</span>
+                  <svg x-show="value === 'Raffle'" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Appeal Dates -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Appeal Start Date <span class="text-red-500">*</span></label>
+            <div class="relative">
+              <input type="date" name="appeal_start" id="appeal_start" required autocomplete="off"
+                     class="block w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Appeal End Date <span class="text-red-500">*</span></label>
+            <div class="relative">
+              <input type="date" name="appeal_end" id="appeal_end" required autocomplete="off"
+                     class="block w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: Package Codes (full width) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Package Codes <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <input type="text" id="package_code_input" placeholder="Type a code and press Space or Enter…" autocomplete="off"
+                   class="block w-full px-3 py-2 pl-9 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 11h.01M7 15h.01M11 7h.01M11 11h.01M11 15h.01M15 7h.01M15 11h.01M15 15h.01" />
+              </svg>
+            </div>
+          </div>
+          <input type="hidden" name="package_codes" id="package_codes_hidden">
+          <div id="package_codes_container" class="mt-2 flex flex-wrap gap-2 min-h-[44px] p-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+            <span class="text-xs text-gray-400 italic self-center" id="pkg-placeholder">No codes added yet</span>
+          </div>
+        </div>
+
+        <!-- Row 5: Description (full width) -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+          <textarea name="description" rows="3" placeholder="Brief description of the campaign's purpose…"
+                    class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow resize-y"></textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 2 — DONOR SOURCE CONFIGURATION
+    ════════════════════════════════════════════════ -->
+    <div class="workspace-panel overflow-hidden"
+         x-data="{
+           donorSource: '{{ form_data.donor_source|default:'house_file' }}',
+           campaignTemperature: '{{ form_data.campaign_temperature|default:'cold' }}'
+         }">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <span class="w-1 h-6 rounded-full bg-violet-600 shrink-0"></span>
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Donor Source Configuration</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Controls where donor records are looked up during donation entry</p>
+        </div>
+        <span class="ml-auto text-xs text-gray-400 font-medium">Step 2 of 5</span>
+      </div>
+      <div class="p-6 space-y-3">
+
+        <!-- Donor Source -->
+        <div class="space-y-3">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-800">Donor Source</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Where donor records are looked up during donation entry.</p>
+          </div>
+          {% for val, label in donor_source_choices %}
+          <label class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all"
+                 :class="donorSource === '{{ val }}' ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400' : 'border-gray-200 hover:bg-gray-50'">
+            <input type="radio" name="donor_source" value="{{ val }}" x-model="donorSource"
+                   class="mt-0.5 text-blue-600 focus:ring-blue-500">
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ label }}</span>
+              {% if val == 'house_file' %}
+            <p class="text-xs text-gray-500 mt-0.5">Search this client's house-file donors.</p>
+              {% else %}
+            <p class="text-xs text-gray-500 mt-0.5">Search campaign-specific donors uploaded via pipe-delimited CSV, then fall back to this client's house-file donors when no campaign record exists.</p>
+              {% endif %}
+            </div>
+          </label>
+          {% endfor %}
+          <div x-show="donorSource === 'data_file'" x-transition x-cloak
+               class="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-xs text-amber-800">Upload your donor CSV/Excel after saving the campaign on the Edit page.</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-2 border-t border-gray-100">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-800">Campaign Type</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Warm campaigns expect QR-backed forms from known supporters. Cold campaigns handle handwritten or new-supporter capture.</p>
+          </div>
+          {% for val, label in campaign_temperature_choices %}
+          <label class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all"
+                 :class="campaignTemperature === '{{ val }}' ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400' : 'border-gray-200 hover:bg-gray-50'">
+            <input type="radio" name="campaign_temperature" value="{{ val }}" x-model="campaignTemperature"
+                   class="mt-0.5 text-blue-600 focus:ring-blue-500" required>
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ label }}</span>
+              {% if val == 'warm' %}
+              <p class="text-xs text-gray-500 mt-0.5">Use when donors should already exist in the selected source and forms are expected to carry a readable QR code.</p>
+              {% else %}
+              <p class="text-xs text-gray-500 mt-0.5">Use when forms are mostly handwritten, QR is optional, and unmatched donors may be created during capture.</p>
+              {% endif %}
+            </div>
+          </label>
+          {% endfor %}
+          <div x-show="campaignTemperature === 'warm'" x-transition x-cloak
+               class="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+            <svg class="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-xs text-amber-800">Warm campaigns do not create brand-new donors automatically. QR failures or source misses are sent to QA for manual handling or rescan under the cold workflow.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 3 — SCANNING CONFIGURATION
+    ════════════════════════════════════════════════ -->
+    <div class="workspace-panel overflow-hidden"
+         x-data="{ scanPurpose: '{{ form_data.scan_purpose|default:'donation' }}' }">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <span class="w-1 h-6 rounded-full bg-indigo-600 shrink-0"></span>
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Scan Purpose</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Controls what OCR data creates after batch processing</p>
+        </div>
+        <span class="ml-auto text-xs text-gray-400 font-medium">Step 3 of 5</span>
+      </div>
+      <div class="p-6 space-y-5">
+        <!-- Scan Purpose -->
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Scan Purpose</label>
+          {% for val, label in scan_purpose_choices %}
+          <label class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all"
+                 :class="scanPurpose === '{{ val }}' ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400' : 'border-gray-200 hover:bg-gray-50'">
+            <input type="radio" name="scan_purpose" value="{{ val }}" x-model="scanPurpose"
+                   class="mt-0.5 text-blue-600 focus:ring-blue-500">
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ label }}</span>
+              {% if val == 'donation' %}
+              <p class="text-xs text-gray-500 mt-0.5">Creates donation records and pre-fills payment details.</p>
+              {% elif val == 'donor_update' %}
+              <p class="text-xs text-gray-500 mt-0.5">Updates donor contact info only; creates a non-financial audit record.</p>
+              {% endif %}
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 4 — FINANCIAL THRESHOLDS
+    ════════════════════════════════════════════════ -->
+    <div class="workspace-panel overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <span class="w-1 h-6 rounded-full bg-emerald-600 shrink-0"></span>
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Financial Thresholds</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Gift values used to flag and alert on high / low donations</p>
+        </div>
+        <span class="ml-auto text-xs text-gray-400 font-medium">Step 4 of 5</span>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              High Gift Value (HGV) <span class="text-red-500">*</span>
+              <span class="ml-1 text-xs font-normal text-gray-400">— triggers manager alert</span>
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 text-sm font-medium">£</span>
+              </div>
+              <input type="number" name="hgv_amount" id="hgv_amount" step="1" min="0" placeholder="0" required
+                     class="block w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              Low Gift Value (LGV) <span class="text-red-500">*</span>
+              <span class="ml-1 text-xs font-normal text-gray-400">— must be less than HGV</span>
+            </label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 text-sm font-medium">£</span>
+              </div>
+              <input type="number" name="lgv_amount" id="lgv_amount" step="1" min="0" placeholder="0" required
+                     class="block w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+            </div>
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-gray-400 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Donations at or above HGV will trigger an alert email to Campaign Managers.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+          SECTION 5 — NOTIFICATIONS & CUSTOM FIELDS
+    ════════════════════════════════════════════════ -->
+    <div class="workspace-panel overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+        <span class="w-1 h-6 rounded-full bg-amber-500 shrink-0"></span>
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Notifications &amp; Custom Fields</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Campaign manager alerts and optional extra form fields</p>
+        </div>
+        <span class="ml-auto text-xs text-gray-400 font-medium">Step 5 of 5</span>
+      </div>
+      <div class="p-6 space-y-6">
+
+        <!-- Campaign Managers -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium text-gray-700">Campaign Manager Emails</label>
+          <p class="text-xs text-gray-500">HGV donor alerts will be sent to these addresses. Press <kbd class="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs font-mono">Enter</kbd> or <kbd class="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs font-mono">Space</kbd> to add.</p>
+          <input type="text" id="manager_email_input" placeholder="e.g. manager@charity.org"
+                 class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow">
+          <input type="hidden" name="campaign_manager_emails" id="manager_emails_hidden">
+          <div id="manager_emails_container" class="flex flex-wrap gap-2 min-h-[44px] p-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg">
+            <span class="text-xs text-gray-400 italic self-center" id="email-placeholder">No managers added yet</span>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-gray-100"></div>
+
+        <!-- Custom Fields (collapsible) -->
+        <div x-data="{ open: false }">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-medium text-gray-800">Custom Fields</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Optional extra fields collected on the donation entry form.</p>
+            </div>
+            <button type="button" @click="open = !open"
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200">
+              <svg class="w-3.5 h-3.5 transition-transform" :class="{'rotate-45': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              <span x-text="open ? 'Hide Fields' : 'Add Custom Fields'"></span>
+            </button>
+          </div>
+
+          <div x-show="open" x-transition x-cloak class="mt-4 space-y-3">
+            <div id="extra-fields-list" class="space-y-3"></div>
+            <div class="flex gap-2">
+              <button type="button" onclick="addCustomField()"
+                      class="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Field
+              </button>
+              <button type="button" onclick="clearCustomFields()"
+                      class="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors border border-red-200">
+                Clear All
+              </button>
+            </div>
+          </div>
+          <input type="hidden" name="extra_fields_json" id="id_extra_fields_json" value="">
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Form Actions -->
+    <div class="flex items-center justify-between border-t border-gray-200 pt-4">
+      <p class="text-xs text-gray-400"><span class="text-red-500">*</span> Required fields</p>
+      <div class="flex items-center gap-3">
+        <a href="{% url 'custom_admin:admin_campaigns' %}"
+           class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+          Cancel
+        </a>
+        <button type="submit"
+                class="px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Create Campaign
+        </button>
+      </div>
+    </div>
+
+  </form>
+</div>
+
+<!-- Scripts -->
+{{ custom_field_type_choices|json_script:"campaign-field-type-choices-json" }}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(() => {
+  function initializeCampaignCreatePage(root = document) {
+    if (typeof flatpickr === 'undefined') {
+      return;
+    }
+
+    root.querySelectorAll('.uk-date-field').forEach(function (input) {
+      if (input.dataset.flatpickrInitialized === 'true') {
+        return;
+      }
+
+      flatpickr(input, {
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        locale: { firstDayOfWeek: 1 },
+      });
+      input.dataset.flatpickrInitialized = 'true';
+    });
+  }
+
+  if (!window.__campaignCreateInitBound) {
+    document.body.addEventListener('htmx:load', function (event) {
+      initializeCampaignCreatePage(event.target);
+    });
+    window.__campaignCreateInitBound = true;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function handleCampaignCreateReady() {
+      initializeCampaignCreatePage(document);
+    }, { once: true });
+  } else {
+    initializeCampaignCreatePage(document);
+  }
+})();
+
+// ── Validation ──────────────────────────────────────────────────
+function showValidationError(message) {
+  if (typeof window.showToast === 'function') {
+    window.showToast(message, 'error');
+    return;
+  }
+  alert(message);
+}
+
+document.getElementById('campaignForm').addEventListener('submit', function (e) {
+  const hgv = parseFloat(document.getElementById('hgv_amount').value);
+  const lgv = parseFloat(document.getElementById('lgv_amount').value);
+
+  if (!isNaN(hgv) && !isNaN(lgv) && hgv <= lgv) {
+    e.preventDefault();
+    showValidationError('HGV Amount must be greater than LGV Amount.');
+    return;
+  }
+
+  const startRaw = document.getElementById('appeal_start').value;
+  const endRaw   = document.getElementById('appeal_end').value;
+  if (startRaw && endRaw) {
+    const toDate = s => { const [d,m,y] = s.split('/'); return new Date(y, m-1, d); };
+    if (toDate(endRaw) < toDate(startRaw)) {
+      e.preventDefault();
+      showValidationError('Appeal End Date must be on or after the Start Date.');
+      return;
+    }
+  }
+
+  // Serialize custom fields
+  const rows = document.querySelectorAll('.extra-field-row');
+  const out = [];
+  rows.forEach(r => {
+    const label = r.querySelector('[data-role="label"]').value.trim();
+    if (!label) return;
+    const field_type  = r.querySelector('[data-role="type"]').value;
+    const options_raw = r.querySelector('[data-role="options"]').value.trim();
+    const options     = options_raw ? options_raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const required    = !!r.querySelector('[data-role="required"]').checked;
+    out.push({ label, field_type, required, options });
+  });
+  document.getElementById('id_extra_fields_json').value = JSON.stringify(out);
+});
+
+// ── Package Codes tags ─────────────────────────────────────────
+(function () {
+  const input     = document.getElementById('package_code_input');
+  const container = document.getElementById('package_codes_container');
+  const hidden    = document.getElementById('package_codes_hidden');
+  const ph        = document.getElementById('pkg-placeholder');
+
+  // Guard: if any required element is missing, skip silently
+  if (!input || !container || !hidden) return;
+
+  const set = new Set();
+
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function render() {
+    container.innerHTML = '';
+    if (set.size === 0) {
+      if (ph) container.appendChild(ph);
+      hidden.value = '';
+      return;
+    }
+    set.forEach(code => {
+      const tag = document.createElement('span');
+      tag.className = 'inline-flex items-center gap-1 pl-2.5 pr-1 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-semibold border border-blue-200';
+      tag.innerHTML = `${esc(code)}<button type="button" class="ml-0.5 p-0.5 rounded hover:bg-blue-200 text-blue-500 hover:text-blue-700" onclick="window._rmPkg('${esc(code)}')"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+      container.appendChild(tag);
+    });
+    hidden.value = Array.from(set).join(',');
+  }
+
+  window._rmPkg = function(code) { set.delete(code); render(); };
+
+  function add(raw) {
+    if (!raw || !raw.trim()) return;
+    raw.trim().toUpperCase().split(/[\s,]+/).forEach(function(c) { if (c) set.add(c); });
+    render();
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      add(input.value);
+      input.value = '';
+    }
+  });
+  // Use 'change' instead of bare blur to avoid double-firing on Enter
+  input.addEventListener('blur', function() {
+    if (input.value.trim()) { add(input.value); input.value = ''; }
+  });
+
+  // Expose add function for programmatic use
+  window._addPkg = add;
+})();
+
+// ── Manager Email tags ─────────────────────────────────────────
+(function () {
+  const set       = new Set();
+  const input     = document.getElementById('manager_email_input');
+  const container = document.getElementById('manager_emails_container');
+  const hidden    = document.getElementById('manager_emails_hidden');
+  const ph        = document.getElementById('email-placeholder');
+
+  function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  const reEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function render() {
+    container.innerHTML = '';
+    if (set.size === 0) { container.appendChild(ph); return; }
+    set.forEach(email => {
+      const tag = document.createElement('span');
+      tag.className = 'inline-flex items-center gap-1 pl-2.5 pr-1 py-1 bg-violet-100 text-violet-700 rounded-md text-xs font-semibold border border-violet-200';
+      tag.innerHTML = `${esc(email)}<button type="button" class="ml-0.5 p-0.5 rounded hover:bg-violet-200 text-violet-500 hover:text-violet-700" onclick="window._rmEmail('${esc(email)}')"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>`;
+      container.appendChild(tag);
+    });
+    hidden.value = Array.from(set).join(',');
+  }
+
+  window._rmEmail = email => { set.delete(email); render(); };
+
+  function add(raw) {
+    raw.trim().toLowerCase().split(/[\s,;]+/).forEach(e => {
+      if (!e) return;
+      if (!reEmail.test(e)) { showValidationError(`Invalid email: ${e}`); return; }
+      set.add(e);
+    });
+    render();
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); add(input.value); input.value = ''; }
+  });
+  input.addEventListener('blur', () => { if (input.value.trim()) { add(input.value); input.value = ''; } });
+})();
+
+// ── Custom Fields builder ──────────────────────────────────────
+window._campaignCreateCfIdx = window._campaignCreateCfIdx || 0;
+function addCustomField(data) {
+  data = data || {};
+  const i = window._campaignCreateCfIdx++;
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  let fieldTypeChoices = [
+    { value: 'text', label: 'Text Input' },
+    { value: 'number', label: 'Number Input' },
+    { value: 'email', label: 'Email Input' },
+    { value: 'phone', label: 'Phone Input' },
+    { value: 'date', label: 'Date Input' },
+    { value: 'dropdown', label: 'Dropdown Select' },
+    { value: 'radio', label: 'Radio Buttons' },
+    { value: 'checkbox', label: 'Checkboxes' },
+    { value: 'textarea', label: 'Text Area' },
+    { value: 'file', label: 'File Upload' },
+  ];
+  const choicesScript = document.getElementById('campaign-field-type-choices-json');
+  if (choicesScript) {
+    try {
+      const parsedChoices = JSON.parse(choicesScript.textContent);
+      if (Array.isArray(parsedChoices) && parsedChoices.length > 0) {
+        fieldTypeChoices = parsedChoices;
+      }
+    } catch (error) {
+      console.warn('Field type choices error:', error);
+    }
+  }
+  const typeOptions = fieldTypeChoices.map(choice =>
+    `<option value="${esc(choice.value)}"${(data.field_type||'text')===choice.value?' selected':''}>${esc(choice.label)}</option>`
+  ).join('');
+  const row = document.createElement('div');
+  row.className = 'extra-field-row p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3';
+  row.dataset.idx = i;
+  row.innerHTML = `
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Label</label>
+        <input type="text" class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Gift Aid Reference" data-role="label" value="${esc(data.label||'')}">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Type</label>
+        <select class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-blue-500 focus:border-blue-500" data-role="type">${typeOptions}</select>
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Options <span class="font-normal normal-case">(dropdown, radio, checkbox; comma-separated)</span></label>
+      <input type="text" class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Option A, Option B" data-role="options" value="${esc(Array.isArray(data.options)?data.options.join(', '):data.options||'')}">
+    </div>
+    <div class="flex items-center justify-between pt-1">
+      <label class="inline-flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" data-role="required" ${data.required?'checked':''} class="rounded text-blue-600 focus:ring-blue-500">
+        <span class="text-sm text-gray-700">Required</span>
+      </label>
+      <button type="button" data-role="remove" class="text-xs font-medium text-red-500 hover:text-red-700 transition-colors">Remove</button>
+    </div>`;
+  row.querySelector('[data-role="remove"]').addEventListener('click', () => row.remove());
+  document.getElementById('extra-fields-list').appendChild(row);
+}
+function clearCustomFields() { document.getElementById('extra-fields-list').innerHTML = ''; }
+</script>
+{% endblock %}

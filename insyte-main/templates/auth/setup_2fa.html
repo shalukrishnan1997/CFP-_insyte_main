@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+
+{% block title %}Setup Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-white py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-xl shadow-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-8">
+        <h1 class="text-3xl font-bold text-white">Enable Two-Factor Authentication</h1>
+        <p class="mt-2 text-blue-100">Add an extra layer of security to your account</p>
+      </div>
+
+      <div class="p-8">
+        {% if messages %}
+        <div class="mb-6 space-y-2">
+          {% for message in messages %}
+          <div class="{% if message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %} px-4 py-3 rounded-lg text-sm">
+            {{ message }}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if setup_step == 'start' %}
+        <!-- Step 1: Introduction -->
+        <div class="space-y-6">
+          <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">What is Two-Factor Authentication?</h3>
+                <p class="mt-2 text-sm text-blue-700">
+                  Two-factor authentication adds an extra layer of security by requiring a verification code from your phone in addition to your password.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <h3 class="text-lg font-semibold text-gray-900">Before you begin:</h3>
+            <ol class="list-decimal list-inside space-y-3 text-gray-700">
+              <li>Install an authenticator app on your phone:
+                <ul class="ml-6 mt-2 space-y-1 text-sm text-gray-600">
+                  <li>• Google Authenticator</li>
+                  <li>• Microsoft Authenticator</li>
+                  <li>• Authy</li>
+                  <li>• Or any compatible TOTP app</li>
+                </ul>
+              </li>
+              <li>Keep your phone handy to scan the QR code</li>
+              <li>Save your backup codes in a secure place</li>
+            </ol>
+          </div>
+
+          <form method="POST" action="{% url 'auth_app:setup_2fa' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="generate">
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              Continue to Setup
+            </button>
+          </form>
+
+          <a href="{% url 'auth_app:user_profile' %}" class="block text-center text-sm text-gray-600 hover:text-gray-900">
+            Cancel
+          </a>
+        </div>
+
+        {% elif setup_step == 'verify' %}
+        <!-- Step 2: Scan QR Code and Verify -->
+        <div class="space-y-6">
+          <div class="text-center">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Scan this QR Code</h3>
+            <div class="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg">
+              <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" class="w-64 h-64">
+            </div>
+          </div>
+
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <p class="text-sm font-medium text-gray-700 mb-2">Can't scan the QR code?</p>
+            <p class="text-xs text-gray-600 mb-2">Enter this key manually in your authenticator app:</p>
+            <div class="bg-white p-3 rounded border border-gray-200">
+              <code class="text-sm font-mono text-gray-900 break-all">{{ secret_key }}</code>
+            </div>
+          </div>
+
+          <form method="POST" action="{% url 'auth_app:setup_2fa' %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify">
+            
+            <div>
+              <label for="otp_token" class="block text-sm font-medium text-gray-700 mb-2">
+                Enter the 6-digit code from your authenticator app
+              </label>
+              <input type="text" 
+                     name="otp_token" 
+                     id="otp_token" 
+                     required 
+                     maxlength="6"
+                     pattern="[0-9]{6}"
+                     inputmode="numeric"
+                     autocomplete="off"
+                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-2xl tracking-widest font-mono"
+                     placeholder="000000"
+                     autofocus>
+            </div>
+
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              Verify and Enable 2FA
+            </button>
+          </form>
+
+          <a href="{% url 'auth_app:user_profile' %}" class="block text-center text-sm text-gray-600 hover:text-gray-900">
+            Cancel Setup
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-6 text-center">
+      <a href="{% url 'auth_app:user_profile' %}" class="text-sm text-gray-600 hover:text-gray-900">
+        ← Back to Profile
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

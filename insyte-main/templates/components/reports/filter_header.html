@@ -1,0 +1,36 @@
+<div class="px-6 py-4 border-b border-gray-200 bg-gray-50/50 rounded-t-xl">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="p-2 rounded-lg bg-blue-50">
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-base font-semibold text-gray-900">{{ report_title }}</h2>
+        <p class="text-xs text-gray-500">{{ report_description }}</p>
+      </div>
+    </div>
+
+    {% if portal %}
+    <button type="button"
+            @click="clearReportPanels()"
+            class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Close filter panel">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+    {% else %}
+    <a href="{% url 'custom_admin:admin_reports' %}?clear=1"
+       class="inline-flex p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+       title="Back to report selection">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      <span class="sr-only">Back to report selection</span>
+    </a>
+    {% endif %}
+  </div>
+</div>

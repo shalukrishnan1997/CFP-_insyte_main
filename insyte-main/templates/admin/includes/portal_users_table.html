@@ -1,0 +1,490 @@
+<div x-data="{ 
+    showFilters: {% if search_query or client_filter or status_filter or role_filter %}true{% else %}false{% endif %},
+    clientDropOpen: false,
+    selectedClientVal: '{{ client_filter|default:'' }}',
+    selectedClientName: '{% if client_filter %}{% for c in clients %}{% if c.id|stringformat:"s" == client_filter %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}All Clients{% endif %}',
+    statusDropOpen: false,
+    selectedStatusVal: '{{ status_filter|default:'' }}',
+    selectedStatusName: '{% if status_filter == 'active' %}Active{% elif status_filter == 'disabled' %}Disabled{% else %}All Status{% endif %}',
+    roleDropOpen: false,
+    selectedRoleVal: '{{ role_filter|default:'' }}',
+    selectedRoleName: '{% if role_filter == 'admin' %}Administrator{% elif role_filter == 'manager' %}Manager{% elif role_filter == 'viewer' %}Viewer{% else %}All Roles{% endif %}'
+}">
+  <!-- Advanced Filters -->
+  <div class="bg-white rounded-lg shadow mb-6">
+    {% if search_query or client_filter or status_filter or role_filter %}
+    {% include "components/admin/filter_toggle_button.html" with active_badge=True button_class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors" %}
+    {% else %}
+    {% include "components/admin/filter_toggle_button.html" with active_badge=False button_class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors" %}
+    {% endif %}
+
+    <div x-show="showFilters" x-collapse class="border-t border-gray-200 p-6" style="overflow: visible;">
+      <form method="get" class="space-y-6" style="overflow: visible;">
+        <input type="hidden" name="view" value="users">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          <!-- Search -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <div class="relative">
+              <input type="text" name="search" value="{{ search_query }}"
+                class="block w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="Name, email, username...">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Client Filter - Elite Dropdown -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <button @click="clientDropOpen = !clientDropOpen" @click.away="clientDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                </svg>
+                <span class="truncate" x-text="selectedClientName || 'All Clients'">All Clients</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': clientDropOpen }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="clientDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button"
+                @click="selectedClientVal = ''; selectedClientName = 'All Clients'; clientDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedClientVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="!selectedClientVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                All Clients
+              </button>
+              {% for client in clients %}
+              <button type="button"
+                @click="selectedClientVal = '{{ client.id }}'; selectedClientName = '{{ client.name|escapejs }}'; clientDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedClientVal === '{{ client.id|stringformat:'s' }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                </svg>
+                {{ client.name }}
+              </button>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="client" x-model="selectedClientVal">
+          </div>
+
+          <!-- Status Filter - Elite Dropdown -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <button @click="statusDropOpen = !statusDropOpen" @click.away="statusDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="truncate" x-text="selectedStatusName || 'All Status'">All Status</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': statusDropOpen }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="statusDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button"
+                @click="selectedStatusVal = ''; selectedStatusName = 'All Status'; statusDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedStatusVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="!selectedStatusVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                All Status
+              </button>
+              <button type="button"
+                @click="selectedStatusVal = 'active'; selectedStatusName = 'Active'; statusDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedStatusVal === 'active' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                Active
+              </button>
+              <button type="button"
+                @click="selectedStatusVal = 'disabled'; selectedStatusName = 'Disabled'; statusDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedStatusVal === 'disabled' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                Disabled
+              </button>
+            </div>
+            <input type="hidden" name="status" x-model="selectedStatusVal">
+          </div>
+
+          <!-- Role Filter - Elite Dropdown -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <button @click="roleDropOpen = !roleDropOpen" @click.away="roleDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <span class="truncate" x-text="selectedRoleName || 'All Roles'">All Roles</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': roleDropOpen }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="roleDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button"
+                @click="selectedRoleVal = ''; selectedRoleName = 'All Roles'; roleDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedRoleVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="!selectedRoleVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                All Roles
+              </button>
+              <button type="button"
+                @click="selectedRoleVal = 'admin'; selectedRoleName = 'Administrator'; roleDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedRoleVal === 'admin' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-2 h-2 rounded-full bg-purple-500"></div>
+                Administrator
+              </button>
+              <button type="button"
+                @click="selectedRoleVal = 'manager'; selectedRoleName = 'Manager'; roleDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedRoleVal === 'manager' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-2 h-2 rounded-full bg-orange-500"></div>
+                Manager
+              </button>
+              <button type="button"
+                @click="selectedRoleVal = 'viewer'; selectedRoleName = 'Viewer'; roleDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedRoleVal === 'viewer' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                Viewer
+              </button>
+            </div>
+            <input type="hidden" name="role" x-model="selectedRoleVal">
+          </div>
+        </div>
+
+        <!-- Filter Actions -->
+        <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+          <button type="submit"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm text-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Apply Filters
+          </button>
+
+          {% if search_query or client_filter or status_filter or role_filter %}
+          <a href="{% url 'custom_admin:client_setup' %}?view=users"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors shadow-sm text-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear Filters
+          </a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+<!-- Users Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invited By</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for portal_user in portal_users %}
+        <tr class="hover:bg-gray-50 {% if portal_user.is_primary %}bg-blue-50{% endif %}">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <div class="shrink-0 h-10 w-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                {{ portal_user.user.first_name|slice:":1"|default:portal_user.user.username|slice:":1"|upper }}
+              </div>
+              <div class="ml-3">
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-medium text-gray-900">
+                    {{ portal_user.user.get_full_name|default:portal_user.user.username }}
+                  </p>
+                  {% if portal_user.is_primary %}
+                    <span class="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      Primary
+                    </span>
+                  {% endif %}
+                </div>
+                <p class="text-xs text-gray-500">{{ portal_user.user.email }}</p>
+                <p class="text-xs text-gray-400">@{{ portal_user.user.username }}</p>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <a href="{% url 'custom_admin:client_edit' portal_user.client.id %}"
+               class="text-sm text-blue-600 hover:text-blue-800 hover:underline">
+              {{ portal_user.client.name }}
+            </a>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+              {% if portal_user.role == 'admin' %}bg-purple-100 text-purple-800
+              {% elif portal_user.role == 'manager' %}bg-orange-100 text-orange-800
+              {% else %}bg-gray-100 text-gray-800{% endif %}">
+              {{ portal_user.get_role_display }}
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            {% if portal_user.is_active %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                Active
+              </span>
+            {% else %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                Disabled
+              </span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {% if portal_user.last_login %}
+              {{ portal_user.last_login|date:"M d, Y H:i" }}
+            {% else %}
+              <span class="text-gray-400">Never</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {% if portal_user.invited_by %}
+              {{ portal_user.invited_by.get_full_name|default:portal_user.invited_by.username }}
+            {% else %}
+              <span class="text-gray-400">-</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <a href="{% url 'custom_admin:client_edit' portal_user.client.id %}"
+               class="text-blue-600 hover:text-blue-900">
+              Manage
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No portal users found</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              {% if search_query or client_filter or status_filter or role_filter %}
+                Try adjusting your filters.
+              {% else %}
+                Create portal users by editing a client.
+              {% endif %}
+            </p>
+            {% if not search_query and not client_filter and not status_filter and not role_filter %}
+            <div class="mt-6">
+              <a href="{% url 'custom_admin:client_setup' %}?view=clients"
+                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                Go to Clients
+              </a>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if portal_users %}
+<div class="text-sm text-gray-600 text-center mt-4">
+  Showing {{ portal_users|length }} portal user{{ portal_users|length|pluralize }}
+</div>
+{% endif %}
+
+<!-- Add Portal User Modal -->
+<div id="addPortalUserModal" class="fixed inset-0 overflow-y-auto h-full w-full hidden z-50" style="background-color: rgba(0, 0, 0, 0.5);">
+  <div class="flex items-center justify-center min-h-screen px-4">
+    <div class="relative w-full max-w-2xl p-6 shadow-2xl rounded-xl bg-white">
+      <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+        <h3 class="text-xl font-semibold text-gray-900">Add Portal User</h3>
+        <button onclick="closePortalUserModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <form method="post" action="{% url 'custom_admin:portal_user_create' %}" class="mt-4 space-y-4" id="createPortalUserForm">
+        {% csrf_token %}
+        
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="client_id" class="block text-sm font-medium text-gray-700">Client <span class="text-red-500">*</span></label>
+              <select id="client_id" name="client_id" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg">
+                <option value="">Select client...</option>
+                {% for client in clients %}
+                <option value="{{ client.id }}">{{ client.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label for="role" class="block text-sm font-medium text-gray-700">Role <span class="text-red-500">*</span></label>
+              <select id="role" name="role" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg">
+                <option value="viewer">Viewer</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="username" class="block text-sm font-medium text-gray-700">Username <span class="text-red-500">*</span></label>
+              <input type="text" id="username" name="username" required 
+                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                     placeholder="username">
+            </div>
+            
+            <div>
+              <label for="email" class="block text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+              <input type="email" id="email" name="email" required 
+                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                     placeholder="user@example.com">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+              <input type="text" id="first_name" name="first_name" 
+                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                     placeholder="John">
+            </div>
+            <div>
+              <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+              <input type="text" id="last_name" name="last_name" 
+                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                     placeholder="Doe">
+            </div>
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">Password <span class="text-red-500">*</span></label>
+            <input type="password" id="password" name="password" required 
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                   placeholder="Minimum 8 characters">
+          </div>
+
+          <div>
+            <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm Password <span class="text-red-500">*</span></label>
+            <input type="password" id="confirm_password" name="confirm_password" required 
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                   placeholder="Re-enter password">
+            <p id="password-error" class="mt-1 text-xs text-red-600 hidden">Passwords do not match</p>
+          </div>
+
+          <div class="flex items-start">
+            <div class="flex items-center h-5">
+              <input id="is_primary" name="is_primary" type="checkbox" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+            </div>
+            <div class="ml-3 text-sm">
+              <label for="is_primary" class="font-medium text-gray-700">Primary Contact</label>
+              <p class="text-gray-500">This user will be the main contact for the client</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200">
+          <button type="button" onclick="closePortalUserModal()" 
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit" 
+                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+            Create Portal User
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  const modal = document.getElementById('addPortalUserModal');
+  const openBtn = document.getElementById('openAddPortalUserModal');
+
+  function openPortalUserModal() {
+    modal.classList.remove('hidden');
+  }
+
+  function closePortalUserModal() {
+    modal.classList.add('hidden');
+    // Reset form
+    const form = document.getElementById('createPortalUserForm');
+    if(form) form.reset();
+    document.getElementById('password-error').classList.add('hidden');
+  }
+
+  openBtn.addEventListener('click', openPortalUserModal);
+
+  // Password Validation
+  document.getElementById('createPortalUserForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm_password').value;
+    const error = document.getElementById('password-error');
+    
+    if (password !== confirm) {
+      e.preventDefault();
+      error.classList.remove('hidden');
+    } else {
+      error.classList.add('hidden');
+    }
+  });
+</script>
+</div>
+

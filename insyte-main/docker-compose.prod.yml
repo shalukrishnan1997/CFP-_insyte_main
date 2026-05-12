@@ -1,0 +1,172 @@
+# =============================================================================
+# INSYTE — Production / DigitalOcean Coolify + managed PostgreSQL
+# =============================================================================
+# No Postgres container: set POSTGRES_HOST (and SSL) to your DO managed cluster.
+# Redis still runs in this stack unless you point CELERY_/DJANGO_ Redis URLs elsewhere.
+#
+# Coolify: set compose file to docker-compose.prod.yml and define APP_DOMAIN,
+# POSTGRES_*, REDIS_PASSWORD, SECRET_KEY, FIELD_ENCRYPTION_SALT, ALLOWED_HOSTS, etc.
+# =============================================================================
+
+x-insyte-django-env: &insyte-django-env
+  DJANGO_SETTINGS_MODULE: responsehandling.settings.production
+  POSTGRES_HOST: ${POSTGRES_HOST}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_NAME: ${POSTGRES_NAME}
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+  REDIS_HOST: insyte-redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+services:
+  insyte-redis:
+    image: redis:8
+    restart: unless-stopped
+    command: >
+      redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - appnet
+
+  insyte-tailwind:
+    image: insyte-app:latest
+    build: .
+    command: [ "uv", "run", "python", "manage.py", "tailwind", "build" ]
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - appnet
+
+  insyte-static:
+    image: insyte-app:latest
+    user: root
+    command: [ "uv", "run", "python", "manage.py", "collectstatic", "--noinput" ]
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+      insyte-tailwind:
+        condition: service_completed_successfully
+    restart: "no"
+    networks:
+      - appnet
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+
+  insyte-migrate:
+    image: insyte-app:latest
+    command: [ "bash", "-lc", "uv run python manage.py migrate --noinput && uv run python manage.py populate_service_items" ]
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - appnet
+
+  insyte-web:
+    image: insyte-app:latest
+    build: .
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+      insyte-migrate:
+        condition: service_completed_successfully
+      insyte-static:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    restart: unless-stopped
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    networks:
+      - appnet
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.insyte-primary.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.insyte-primary.entrypoints=http,https"
+      - "traefik.http.routers.insyte-primary.tls=true"
+      - "traefik.http.routers.insyte-primary.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.insyte-primary.service=insyte-primary-svc"
+      - "traefik.http.services.insyte-primary-svc.loadbalancer.server.port=8000"
+      - "traefik.http.routers.insyte-primary.middlewares=insyte-headers"
+      - "traefik.http.middlewares.insyte-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.insyte-headers.headers.sslredirect=true"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS -H \"Host: $${APP_DOMAIN}\" http://127.0.0.1:8000/health/live/ >/dev/null || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  insyte-celery:
+    image: insyte-app:latest
+    command: uv run celery -A responsehandling worker -l info --concurrency=4
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+      insyte-web:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      # `uv run celery inspect ping` cold-imports Django+Celery and round-trips the
+      # broker on every probe; cumulative startup eats most of the timeout and the
+      # container flips to unhealthy despite a working worker. Match the cheap
+      # process check used for celery-beat below.
+      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - media_volume:/app/media
+    networks:
+      - appnet
+
+  insyte-celery-beat:
+    image: insyte-app:latest
+    command: uv run celery -A responsehandling beat -l info
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-redis:
+        condition: service_healthy
+      insyte-web:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - media_volume:/app/media
+    networks:
+      - appnet
+
+volumes:
+  static_volume:
+  media_volume:
+
+networks:
+  appnet:
+    driver: bridge
+  coolify:
+    external: true

@@ -1,0 +1,282 @@
+# =============================================================================
+# INSYTE — Development / Hetzner Coolify (bundled Postgres + Redis)
+# =============================================================================
+# Coolify: set "Docker Compose" to this file. Required env vars are documented
+# in README (Coolify sections). Defaults below suit local Postgres in this stack.
+#
+# POSTGRES_HOST defaults to insyte-db (service name). REDIS_PASSWORD and DB
+# credentials must be set in Coolify (no .env files on the server).
+# =============================================================================
+
+x-insyte-django-env: &insyte-django-env
+  DJANGO_SETTINGS_MODULE: responsehandling.settings.production
+  POSTGRES_HOST: ${POSTGRES_HOST:-insyte-db}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  POSTGRES_NAME: ${POSTGRES_NAME}
+  # Leave empty for container Postgres; managed DBs use require / verify-full
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-}
+  REDIS_HOST: insyte-redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+services:
+  insyte-db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - appnet
+
+  insyte-redis:
+    image: redis:8
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - appnet
+
+  insyte-web:
+    image: insyte-app:latest
+    build: .
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+      insyte-redis:
+        condition: service_healthy
+      insyte-migrate:
+        condition: service_completed_successfully
+      insyte-static:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    restart: unless-stopped
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    networks:
+      - appnet
+      - coolify
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.insyte-primary.rule=Host(`dev.insyte.uk`)"
+      - "traefik.http.routers.insyte-primary.entrypoints=https"
+      - "traefik.http.routers.insyte-primary.tls=true"
+      - "traefik.http.routers.insyte-primary.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.insyte-primary.service=insyte-primary-svc"
+      - "traefik.http.services.insyte-primary-svc.loadbalancer.server.port=8000"
+      # - "traefik.http.routers.insyte-primary.middlewares=insyte-headers"
+      # - "traefik.http.middlewares.insyte-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      # - "traefik.http.middlewares.insyte-headers.headers.sslredirect=true"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: dev.insyte.uk' -H 'X-Forwarded-Proto: https' http://localhost:8000/health/live/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  insyte-celery:
+    image: insyte-app:latest
+    # Concurrency is env-driven so we can tune per-server in Coolify without
+    # a code change. Default 2 fits a 2 vCPU / 4 GB box without OOM-killing
+    # postgres; bump to match CPU count on bigger boxes.
+    command: uv run celery -A responsehandling worker -l info --concurrency=${CELERY_CONCURRENCY:-2}
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+      insyte-redis:
+        condition: service_healthy
+      insyte-web:
+        condition: service_started
+    restart: unless-stopped
+    # `mem_limit` (not `deploy.resources.limits.memory`) because Coolify runs
+    # `docker compose up`, not swarm — the v3 `deploy.resources` block is
+    # silently ignored without `--compatibility`.
+    mem_limit: 1g
+    healthcheck:
+      # `uv run celery inspect ping` cold-imports Django+Celery and round-trips the
+      # broker on every probe; cumulative startup eats most of the timeout and the
+      # container flips to unhealthy despite a working worker. Match the cheap
+      # process check used for celery-beat below.
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - media_volume:/app/media
+    networks:
+      - appnet
+
+  insyte-celery-beat:
+    image: insyte-app:latest
+    command: uv run celery -A responsehandling beat -l info
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+      insyte-redis:
+        condition: service_healthy
+      insyte-web:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - media_volume:/app/media
+    networks:
+      - appnet
+
+  insyte-migrate:
+    image: insyte-app:latest
+    command: ["bash", "-lc", "uv run python manage.py migrate --noinput && uv run python manage.py populate_service_items"]
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - appnet
+
+  insyte-static:
+    image: insyte-app:latest
+    user: root
+    command: ["uv", "run", "python", "manage.py", "collectstatic", "--noinput"]
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+      insyte-tailwind:
+        condition: service_completed_successfully
+    restart: "no"
+    networks:
+      - appnet
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+
+  insyte-tailwind:
+    image: insyte-app:latest
+    command: ["uv", "run", "python", "manage.py", "tailwind", "build"]
+    env_file:
+      - .env
+    environment:
+      <<: *insyte-django-env
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+    restart: "no"
+    # One-shot build container — runs at deploy time. Cap so a runaway
+    # tailwind/Django import can't OOM-kill postgres or the running web.
+    mem_limit: 512m
+    networks:
+      - appnet
+
+  # Always-on backup sidecar:
+  #  - runs an initial pg_dump on container start (so a redeploy = a fresh backup)
+  #  - then sleeps 24h between dumps and prunes anything older than 7 days
+  #  - dumps land in the `db_backups` volume (separate from `pgdata`)
+  # Override the cadence with BACKUP_INTERVAL_SECONDS (default 86400).
+  insyte-db-backup:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGHOST: insyte-db
+      PGDATABASE: ${POSTGRES_NAME}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    entrypoint: |
+      bash -c '
+        mkdir -p /backups
+        while true; do
+          STAMP=$$(date -u +%Y%m%d_%H%M%SZ)
+          OUT=/backups/$${PGDATABASE}_$${STAMP}.dump
+          echo "[$$(date -u +%FT%TZ)] starting pg_dump → $${OUT}"
+          if pg_dump --format=custom --compress=9 -f "$${OUT}"; then
+            echo "[$$(date -u +%FT%TZ)] ✅ backup ok ($${OUT})"
+            find /backups -name "*.dump" -mtime +$${BACKUP_RETENTION_DAYS} -print -delete
+          else
+            rc=$$?
+            echo "[$$(date -u +%FT%TZ)] ❌ pg_dump failed (rc=$${rc})"
+            rm -f "$${OUT}"
+          fi
+          echo "[$$(date -u +%FT%TZ)] sleeping $${BACKUP_INTERVAL_SECONDS}s"
+          sleep "$${BACKUP_INTERVAL_SECONDS}"
+        done
+      '
+    # Healthcheck fails if no fresh dump exists in the last 2 days. The
+    # `-mtime -2` window absorbs the legitimate first 24h after a deploy
+    # (initial dump just took place) and the next 24h sleep before the
+    # second dump — only flips unhealthy if the loop actually wedges.
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /backups && [ -n \"$(find /backups -name '*.dump' -mtime -2 2>/dev/null | head -n 1)\" ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      # 5-minute grace lets the initial pg_dump finish before the first probe.
+      start_period: 300s
+    # `pg_dump --compress=9` is CPU-bound. Cap it so the daily dump cannot
+    # starve the web/celery workers on a small Hetzner host.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+    volumes:
+      - db_backups:/backups
+    depends_on:
+      insyte-db:
+        condition: service_healthy
+    networks:
+      - appnet
+
+volumes:
+  pgdata:
+  static_volume:
+  media_volume:
+  db_backups:
+
+networks:
+  appnet:
+    driver: bridge
+  coolify:
+    external: true

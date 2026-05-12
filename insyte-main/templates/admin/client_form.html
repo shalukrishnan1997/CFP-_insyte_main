@@ -1,0 +1,189 @@
+﻿{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}{% if client %}Edit Client{% else %}Create Client{% endif %} - DMS{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">{% if client %}Edit Client{% else %}Create Client{% endif %}</h1>
+      <p class="mt-1 text-sm text-gray-500">{% if client %}Update client/charity organization information{% else %}Add a new charity organization or client to the system{% endif %}</p>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6">
+    {% csrf_token %}
+    
+    <!-- Basic Information -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <h3 class="text-lg font-medium text-gray-900">Basic Information</h3>
+      </div>
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Organization Name *</label>
+          <input name="name" required value="{{ client.name|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="e.g. Save the Children UK">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Client Code *
+            <span class="ml-1 text-xs text-gray-500 font-normal">(short uppercase code, e.g. BRC)</span>
+          </label>
+          <input name="client_code" required value="{{ client.client_code|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="e.g. BRC, RNIB, OXFAM"
+                 style="text-transform:uppercase"
+                 maxlength="20">
+          <p class="mt-1 text-xs text-gray-500">Used in R2 scan folder path: <code class="bg-gray-100 px-1 rounded">ScanOutput/{client_code}/{appeal_code}/{payment_method}/</code></p>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Description</label>
+          <textarea name="description" rows="3"
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Brief description about the organization">{{ client.description|default:'' }}</textarea>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Logo</label>
+          {% if client.logo %}
+          <div class="mt-2 mb-2 flex items-center gap-4">
+            <img src="{{ client.logo.url }}" alt="{{ client.name }}" class="h-16 w-16 rounded-lg object-cover border border-gray-200">
+            <span class="text-xs text-gray-500">Current logo</span>
+          </div>
+          {% endif %}
+          <input type="file" name="logo" accept="image/*"
+                 class="mt-1 block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-lg file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100">
+          <p class="mt-1 text-xs text-gray-500">PNG, JPG, or GIF (max. 2MB)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact Information -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 bg-blue-50">
+        <h3 class="text-lg font-medium text-blue-900">Contact Information</h3>
+        <p class="text-sm text-blue-600 mt-1">All fields in this section are required</p>
+      </div>
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Email *</label>
+          <input type="email" name="email" required value="{{ client.email|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="contact@organization.org">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Phone *</label>
+          <input type="tel" name="phone" required value="{{ client.phone|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="+44 20 1234 5678">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Website</label>
+          <input type="url" name="website" value="{{ client.website|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="https://www.organization.org">
+        </div>
+      </div>
+    </div>
+
+    <!-- Address Information -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 bg-green-50">
+        <h3 class="text-lg font-medium text-green-900">Address</h3>
+        <p class="text-sm text-green-600 mt-1">All fields in this section are required</p>
+      </div>
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Address Line 1 *</label>
+          <input name="address_line1" required value="{{ client.address_line1|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="Street address">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Address Line 2</label>
+          <input name="address_line2" value="{{ client.address_line2|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="Building, floor, etc.">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">City *</label>
+          <input name="city" required value="{{ client.city|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="London">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Postcode *</label>
+          <input name="postal_code" required value="{{ client.postal_code|default:'' }}"
+                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                 placeholder="SW1A 1AA">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Country *</label>
+          <select name="country" required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+            <option value="">Select Country</option>
+            <option value="United Kingdom" {% if client.country == 'United Kingdom' or not client %}selected{% endif %}>United Kingdom</option>
+            <option value="England" {% if client.country == 'England' %}selected{% endif %}>England</option>
+            <option value="Scotland" {% if client.country == 'Scotland' %}selected{% endif %}>Scotland</option>
+            <option value="Wales" {% if client.country == 'Wales' %}selected{% endif %}>Wales</option>
+            <option value="Northern Ireland" {% if client.country == 'Northern Ireland' %}selected{% endif %}>Northern Ireland</option>
+            <option value="Ireland" {% if client.country == 'Ireland' %}selected{% endif %}>Ireland</option>
+            <option value="United States" {% if client.country == 'United States' %}selected{% endif %}>United States</option>
+            <option value="Canada" {% if client.country == 'Canada' %}selected{% endif %}>Canada</option>
+            <option value="Australia" {% if client.country == 'Australia' %}selected{% endif %}>Australia</option>
+            <option value="France" {% if client.country == 'France' %}selected{% endif %}>France</option>
+            <option value="Germany" {% if client.country == 'Germany' %}selected{% endif %}>Germany</option>
+            <option value="Other" {% if client.country == 'Other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Settings -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 bg-purple-50">
+        <h3 class="text-lg font-medium text-purple-900">Status Settings</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center">
+          <input type="checkbox" name="is_active" id="is_active" 
+                 {% if not client or client.is_active %}checked{% endif %}
+                 class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+          <label for="is_active" class="ml-3 block text-sm text-gray-900">
+            <span class="font-medium">Active</span>
+            <span class="text-gray-500"> - Organization is currently active and can be used in campaigns</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Actions -->
+    <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+      <a href="{% url 'custom_admin:client_setup' %}" 
+         class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+        Cancel
+      </a>
+      <button type="submit" 
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+        {% if client %}Update Client{% else %}Create Client{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

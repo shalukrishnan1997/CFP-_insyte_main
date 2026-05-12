@@ -1,0 +1,385 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Paying-In Slips - DMS{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6" x-data="{ 
+    showFilters: {% if status_filter or client_filter or date_from or date_to %}true{% else %}false{% endif %},
+    statusDropOpen: false,
+    selectedStatusVal: '{{ status_filter|default:'' }}',
+    selectedStatusName: '{% if status_filter %}{% for v, l in status_choices %}{% if v == status_filter %}{{ l|escapejs }}{% endif %}{% endfor %}{% else %}All Statuses{% endif %}',
+    clientDropOpen: false,
+    selectedClientVal: '{{ client_filter|default:'' }}',
+    selectedClientName: '{% if client_filter %}{% for c in clients %}{% if c.id|stringformat:"s" == client_filter %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}All Clients{% endif %}'
+}">
+  <div class="page-header-section flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="flex items-center gap-4 flex-wrap">
+      <h1 class="text-2xl font-bold text-gray-900">Paying-In Slips</h1>
+      <!-- Metric Tags -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200" title="Total Slips">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {{ stats.total_slips|default:0 }} Total
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-200" title="Draft Slips">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          {{ stats.draft_count|default:0 }} Draft
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-md border border-amber-200" title="Ready for Banking">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {{ stats.ready_count|default:0 }} Ready
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200" title="Banked Slips">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {{ stats.banked_count|default:0 }} Banked
+        </span>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{% url 'custom_admin:daily_banking_dashboard' %}"
+        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-all">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Create New Slip
+      </a>
+    </div>
+  </div>
+
+  <!-- Advanced Filters -->
+  <div class="bg-white rounded-lg shadow">
+    <button @click="showFilters = !showFilters"
+      class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+        <span class="font-medium text-gray-900">Advanced Filters</span>
+        {% if status_filter or client_filter or date_from or date_to %}
+        <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">Active</span>
+        {% endif %}
+      </div>
+      <svg class="w-5 h-5 text-gray-400 transform transition-transform" :class="{ 'rotate-180': showFilters }"
+        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
+    <div x-show="showFilters" x-collapse class="border-t border-gray-200 p-6" style="overflow: visible;">
+      <form method="get" action="{% url 'custom_admin:slip_list' %}" class="space-y-6" style="overflow: visible;">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          <!-- Status Filter - Elite Dropdown -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <button @click="statusDropOpen = !statusDropOpen" @click.away="statusDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="truncate" x-text="selectedStatusName || 'All Statuses'">All Statuses</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': statusDropOpen }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="statusDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button"
+                @click="selectedStatusVal = ''; selectedStatusName = 'All Statuses'; statusDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedStatusVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="!selectedStatusVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                All Statuses
+              </button>
+              {% for value, label in status_choices %}
+              <button type="button"
+                @click="selectedStatusVal = '{{ value }}'; selectedStatusName = '{{ label|escapejs }}'; statusDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedStatusVal === '{{ value }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <div class="w-4 h-4 rounded-full 
+                  {% if value == 'draft' %}bg-gray-400
+                  {% elif value == 'ready' %}bg-yellow-400
+                  {% elif value == 'banked' %}bg-green-400{% endif %}"></div>
+                {{ label }}
+              </button>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="status" x-model="selectedStatusVal">
+          </div>
+
+          <!-- Client Filter - Elite Dropdown -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <button @click="clientDropOpen = !clientDropOpen" @click.away="clientDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                </svg>
+                <span class="truncate" x-text="selectedClientName || 'All Clients'">All Clients</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': clientDropOpen }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="clientDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button"
+                @click="selectedClientVal = ''; selectedClientName = 'All Clients'; clientDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedClientVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="!selectedClientVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                All Clients
+              </button>
+              {% for c in clients %}
+              <button type="button"
+                @click="selectedClientVal = '{{ c.id }}'; selectedClientName = '{{ c.name|escapejs }}'; clientDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedClientVal === '{{ c.id|stringformat:'s' }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                </svg>
+                {{ c.name }}
+              </button>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="client" x-model="selectedClientVal">
+          </div>
+
+          <!-- Date From -->
+          <div>
+            <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+            <div class="relative">
+              <input type="text" name="date_from" id="date_from" value="{{ date_from }}"
+                class="block w-full pl-3 pr-9 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer bg-white flatpickr-date"
+                placeholder="YYYY-MM-DD" readonly>
+              <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Date To -->
+          <div>
+            <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+            <div class="relative">
+              <input type="text" name="date_to" id="date_to" value="{{ date_to }}"
+                class="block w-full pl-3 pr-9 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer bg-white flatpickr-date"
+                placeholder="YYYY-MM-DD" readonly>
+              <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter Actions -->
+        <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+          <button type="submit"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Apply Filters
+          </button>
+
+          {% if status_filter or client_filter or date_from or date_to %}
+          <a href="{% url 'custom_admin:slip_list' %}"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors shadow-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear Filters
+          </a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Slips Table -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    {% if page_obj %}
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Slip Number</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Banking Date</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Type</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Items</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for slip in page_obj %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4">
+            <a href="{% url 'custom_admin:slip_detail' slip.id %}"
+              class="text-blue-600 hover:text-blue-800 font-medium">
+              {{ slip.slip_number }}
+            </a>
+          </td>
+          <td class="px-6 py-4 text-gray-900">{{ slip.client.name }}</td>
+          <td class="px-6 py-4 text-gray-500">{{ slip.banking_date|date:"d/m/Y" }}</td>
+          <td class="px-6 py-4 text-gray-500">{{ slip.get_payment_type_display }}</td>
+          <td class="px-6 py-4 text-right text-gray-900">{{ slip.total_items }}</td>
+          <td class="px-6 py-4 text-right font-medium text-gray-900">£{{ slip.total_amount|floatformat:2 }}</td>
+          <td class="px-6 py-4">
+            <span class="px-2 py-1 text-xs font-medium rounded-full
+              {% if slip.status == 'draft' %}bg-gray-100 text-gray-800
+              {% elif slip.status == 'ready' %}bg-yellow-100 text-yellow-800
+              {% elif slip.status == 'banked' %}bg-green-100 text-green-800{% endif %}">
+              {{ slip.get_status_display }}
+            </span>
+          </td>
+          <td class="px-6 py-4 text-sm text-gray-500">
+            {{ slip.created_at|date:"d/m/Y H:i" }}
+            {% if slip.created_by %}<br><span class="text-xs">
+              by {{ slip.created_by.get_full_name|default:slip.created_by.username }}</span>{% endif %}
+          </td>
+          <td class="px-6 py-4 text-right">
+            <div class="flex items-center justify-end gap-2">
+              {% if slip.status == 'draft' %}
+              <a href="{% url 'custom_admin:slip_edit' slip.id %}" class="text-blue-600 hover:text-blue-800"
+                title="Edit">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </a>
+              {% endif %}
+              <a href="{% url 'custom_admin:slip_detail' slip.id %}" class="text-blue-600 hover:text-blue-800"
+                title="View">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </a>
+              <a href="{% url 'custom_admin:slip_print' slip.id %}" class="text-gray-600 hover:text-gray-800"
+                title="Print" target="_blank">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="px-6 py-12 text-center text-gray-500">
+            No paying-in slips found matching your criteria.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+      <div class="text-sm text-gray-500">
+        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} slips
+      </div>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&client={{ client_filter }}&date_from={{ date_from }}&date_to={{ date_to }}"
+          class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">Previous</a>
+        {% endif %}
+
+        <span class="px-3 py-1 bg-blue-600 text-white rounded">{{ page_obj.number }}</span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&client={{ client_filter }}&date_from={{ date_from }}&date_to={{ date_to }}"
+          class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="px-6 py-12 text-center text-gray-500">
+      No paying-in slips have been created yet.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function initializeSlipListDatePickers() {
+    const dateInputs = document.querySelectorAll('.flatpickr-date');
+    if (!dateInputs.length) {
+      return;
+    }
+
+    window.ensureFlatpickrAssets()
+      .then(() => {
+        dateInputs.forEach((input) => {
+          if (input._flatpickr) {
+            return;
+          }
+
+          flatpickr(input, {
+            dateFormat: 'Y-m-d',
+            allowInput: true,
+          });
+        });
+      })
+      .catch((error) => {
+        console.error('Could not initialize paying-in slip date filters.', error);
+      });
+  }
+
+  initializeSlipListDatePickers();
+</script>
+{% endblock %}

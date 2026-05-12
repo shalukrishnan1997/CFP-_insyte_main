@@ -1,0 +1,22 @@
+{% extends "client_portal/base.html" %}
+
+{% block title %}Scanned Form - {{ client.name }}{% endblock %}
+
+{% block page_content %}
+<div class="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+  <div>
+    <p class="text-sm text-gray-500">Supporter Scan</p>
+    <h1 class="text-2xl font-bold text-gray-900">
+      {{ donation.donor.full_name|default:donation.data_file_donor.full_name|default:"Scanned Form" }}
+    </h1>
+    <p class="mt-1 text-sm text-gray-500">
+      {{ donation.campaign.name }}
+      {% if placeholder.urn %}• URN {{ placeholder.urn }}{% endif %}
+    </p>
+  </div>
+
+  <div class="h-[calc(100vh-12rem)] min-h-[38rem]">
+    {% include 'components/scanned_form_viewer.html' with image_url=image_url predicted_url='' has_image=has_image page_urls_json=page_urls_json viewer_id='client-scan-viewer' subtitle=donation.get_payment_method_display compact=False %}
+  </div>
+</div>
+{% endblock %}

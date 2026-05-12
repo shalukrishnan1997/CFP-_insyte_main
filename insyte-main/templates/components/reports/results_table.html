@@ -1,0 +1,91 @@
+<div class="bg-white rounded-xl shadow-sm border border-gray-200">
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead>
+        <tr class="bg-gray-50">
+          {% for header in table_headers %}
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+            {{ header }}
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-100">
+        {% for row in report_data %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          {% for cell in row %}
+          <td class="px-4 py-3 text-gray-700 whitespace-nowrap">{{ cell }}</td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{{ table_headers|length }}"
+              class="px-6 py-12 text-center text-gray-400 text-sm">
+            No data found for the selected filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if report_data %}
+  <div class="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <p class="text-sm text-gray-500">
+      Showing <span class="font-medium">{{ page_start }}</span>–<span class="font-medium">{{ page_end }}</span>
+      of <span class="font-medium">{{ total_records }}</span>
+    </p>
+    <div class="flex items-center gap-2">
+      {% if has_previous %}
+      {% if portal %}
+      <button type="button"
+              hx-post="{% url 'client_portal:reports_results_partial' %}"
+              hx-vals='{"report_type":"{{ report_type }}","scope":"client","client_id":"{{ client_id }}","campaign_id":"{{ campaign_id }}","date_from":"{{ date_from|date:'Y-m-d' }}","date_to":"{{ date_to|date:'Y-m-d' }}","per_page":"{{ per_page }}","page":"{{ previous_page }}"}'
+              hx-include="[name=csrfmiddlewaretoken]"
+              hx-target="#results-panel"
+              hx-swap="innerHTML"
+              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors">
+        &larr; Prev
+      </button>
+      {% else %}
+      <button type="button"
+              hx-post="{% url 'custom_admin:admin_reports_results_partial' %}"
+              hx-vals='{"report_type":"{{ report_type }}","scope":"{{ scope }}","client":"{{ client_id }}","campaign":"{{ campaign_id }}","date_from":"{{ date_from|date:'Y-m-d' }}","date_to":"{{ date_to|date:'Y-m-d' }}","per_page":"{{ per_page }}","page":"{{ previous_page }}"}'
+              hx-include="[name=csrfmiddlewaretoken]"
+              hx-target="#results-panel"
+              hx-swap="innerHTML"
+              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors">
+        &larr; Prev
+      </button>
+      {% endif %}
+      {% endif %}
+
+      <span class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg">{{ current_page }}</span>
+
+      {% if has_next %}
+      {% if portal %}
+      <button type="button"
+              hx-post="{% url 'client_portal:reports_results_partial' %}"
+              hx-vals='{"report_type":"{{ report_type }}","scope":"client","client_id":"{{ client_id }}","campaign_id":"{{ campaign_id }}","date_from":"{{ date_from|date:'Y-m-d' }}","date_to":"{{ date_to|date:'Y-m-d' }}","per_page":"{{ per_page }}","page":"{{ next_page }}"}'
+              hx-include="[name=csrfmiddlewaretoken]"
+              hx-target="#results-panel"
+              hx-swap="innerHTML"
+              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors">
+        Next &rarr;
+      </button>
+      {% else %}
+      <button type="button"
+              hx-post="{% url 'custom_admin:admin_reports_results_partial' %}"
+              hx-vals='{"report_type":"{{ report_type }}","scope":"{{ scope }}","client":"{{ client_id }}","campaign":"{{ campaign_id }}","date_from":"{{ date_from|date:'Y-m-d' }}","date_to":"{{ date_to|date:'Y-m-d' }}","per_page":"{{ per_page }}","page":"{{ next_page }}"}'
+              hx-include="[name=csrfmiddlewaretoken]"
+              hx-target="#results-panel"
+              hx-swap="innerHTML"
+              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors">
+        Next &rarr;
+      </button>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

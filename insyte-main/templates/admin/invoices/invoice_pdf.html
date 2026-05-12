@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice.invoice_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm 15mm 25mm 15mm;
+            @bottom-center {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9px;
+                color: #666;
+            }
+            @bottom-right {
+                content: "{{ invoice.invoice_number }}";
+                font-size: 9px;
+                color: #666;
+            }
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.4;
+            color: #333;
+        }
+        
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2563eb;
+        }
+        
+        .company-info {
+            flex: 1;
+        }
+        
+        .company-logo {
+            max-height: 60px;
+            max-width: 200px;
+            margin-bottom: 10px;
+        }
+        
+        .company-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        
+        .company-details {
+            font-size: 10px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        .invoice-title-section {
+            text-align: right;
+        }
+        
+        .invoice-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        
+        .invoice-number {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        
+        .invoice-date {
+            font-size: 11px;
+            color: #4b5563;
+        }
+        
+        .invoice-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 10px;
+        }
+        
+        .status-draft { background: #fef3c7; color: #92400e; }
+        .status-issued { background: #dbeafe; color: #1e40af; }
+        .status-paid { background: #d1fae5; color: #065f46; }
+        .status-overdue { background: #fee2e2; color: #991b1b; }
+        .status-cancelled { background: #f3f4f6; color: #374151; }
+        
+        .billing-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .bill-to, .invoice-details {
+            width: 48%;
+        }
+        
+        .section-label {
+            font-size: 9px;
+            font-weight: bold;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .client-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        
+        .client-details {
+            font-size: 10px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 10px;
+            font-size: 10px;
+        }
+        
+        .details-grid dt {
+            color: #6b7280;
+        }
+        
+        .details-grid dd {
+            color: #1f2937;
+            font-weight: 500;
+        }
+        
+        /* Line Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .items-table thead th {
+            background: #2563eb;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .items-table thead th:first-child {
+            border-radius: 4px 0 0 0;
+        }
+        
+        .items-table thead th:last-child {
+            border-radius: 0 4px 0 0;
+            text-align: right;
+        }
+        
+        .items-table thead th.text-center {
+            text-align: center;
+        }
+        
+        .items-table thead th.text-right {
+            text-align: right;
+        }
+        
+        .items-table tbody td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        
+        .items-table tbody tr:nth-child(even) {
+            background: #f9fafb;
+        }
+        
+        .items-table tbody td.text-center {
+            text-align: center;
+        }
+        
+        .items-table tbody td.text-right {
+            text-align: right;
+        }
+        
+        .item-description {
+            font-weight: 500;
+            color: #1f2937;
+        }
+        
+        .item-note {
+            font-size: 9px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        
+        /* Summary Section */
+        .summary-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+        }
+        
+        .summary-table {
+            width: 280px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .summary-row.subtotal {
+            background: #f9fafb;
+        }
+        
+        .summary-row.discount {
+            color: #059669;
+        }
+        
+        .summary-row.tax {
+            font-size: 9px;
+            color: #6b7280;
+        }
+        
+        .summary-row.total {
+            background: #2563eb;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+        }
+        
+        .summary-row.balance {
+            background: #fef3c7;
+            color: #92400e;
+            font-weight: bold;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+        
+        .summary-row.paid {
+            color: #059669;
+            font-weight: 500;
+        }
+        
+        /* Notes Section */
+        .notes-section {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 4px;
+            border-left: 3px solid #2563eb;
+        }
+        
+        .notes-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+        
+        .notes-content {
+            font-size: 10px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        /* Terms Section */
+        .terms-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .terms-title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        
+        .terms-content {
+            font-size: 9px;
+            color: #9ca3af;
+            line-height: 1.6;
+        }
+        
+        /* Payment Info */
+        .payment-info {
+            margin-top: 30px;
+            padding: 15px;
+            background: #ecfdf5;
+            border-radius: 4px;
+        }
+        
+        .payment-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #065f46;
+            margin-bottom: 8px;
+        }
+        
+        .payment-details {
+            font-size: 10px;
+            color: #047857;
+        }
+        
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 8px;
+            color: #9ca3af;
+            padding: 10px 0;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        /* Service Metrics Table Styling */
+        .metric-category {
+            background: #f3f4f6;
+            font-weight: bold;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <!-- Invoice Header -->
+    <div class="invoice-header">
+        <div class="company-info">
+            {% if settings.company_logo_url %}
+            <img src="{{ settings.company_logo_url }}" alt="Company Logo" class="company-logo">
+            {% endif %}
+            <div class="company-name">{{ settings.company_name|default:"INSYTE" }}</div>
+            <div class="company-details">
+                {% if settings.company_address %}
+                {{ settings.company_address|linebreaksbr }}<br>
+                {% endif %}
+                {% if settings.company_phone %}Phone: {{ settings.company_phone }}<br>{% endif %}
+                {% if settings.company_email %}Email: {{ settings.company_email }}<br>{% endif %}
+                {% if settings.company_vat_number %}VAT: {{ settings.company_vat_number }}{% endif %}
+            </div>
+        </div>
+        <div class="invoice-title-section">
+            <div class="invoice-title">INVOICE</div>
+            <div class="invoice-number"># {{ invoice.invoice_number }}</div>
+            <div class="invoice-date">Issue Date: {{ invoice.issue_date|date:"d F Y" }}</div>
+            <div class="invoice-date">Due Date: {{ invoice.due_date|date:"d F Y" }}</div>
+            <span class="invoice-status status-{{ invoice.status }}">{{ invoice.get_status_display }}</span>
+        </div>
+    </div>
+    
+    <!-- Billing Section -->
+    <div class="billing-section">
+        <div class="bill-to">
+            <div class="section-label">Bill To</div>
+            <div class="client-name">{{ invoice.client.name }}</div>
+            <div class="client-details">
+                {% if invoice.client.address %}{{ invoice.client.address|linebreaksbr }}<br>{% endif %}
+                {% if invoice.client.email %}{{ invoice.client.email }}<br>{% endif %}
+                {% if invoice.client.phone %}{{ invoice.client.phone }}{% endif %}
+            </div>
+        </div>
+        <div class="invoice-details">
+            <div class="section-label">Invoice Details</div>
+            <dl class="details-grid">
+                <dt>Billing Period:</dt>
+                <dd>{{ invoice.billing_period_start|date:"d M Y" }} - {{ invoice.billing_period_end|date:"d M Y" }}</dd>
+                <dt>Payment Terms:</dt>
+                <dd>Net {{ invoice.due_date|timeuntil:invoice.issue_date }} from issue</dd>
+                {% if invoice.payment_method %}
+                <dt>Payment Method:</dt>
+                <dd>{{ invoice.get_payment_method_display }}</dd>
+                {% endif %}
+            </dl>
+        </div>
+    </div>
+    
+    <!-- Line Items Table -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 50%;">Description</th>
+                <th class="text-center" style="width: 15%;">Quantity</th>
+                <th class="text-right" style="width: 17%;">Unit Price</th>
+                <th class="text-right" style="width: 18%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Donation Services -->
+            {% if invoice.total_donations_captured > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Donation Capture Service</div>
+                    <div class="item-note">Processing of donation records</div>
+                </td>
+                <td class="text-center">{{ invoice.total_donations_captured }}</td>
+                <td class="text-right">£{{ settings.price_per_donation|floatformat:4 }}</td>
+                <td class="text-right">£{{ donation_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.gift_aid_captured > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Gift Aid Declaration Processing</div>
+                    <div class="item-note">Gift aid declarations captured (£{{ invoice.gift_aid_amount|floatformat:2 }} total)</div>
+                </td>
+                <td class="text-center">{{ invoice.gift_aid_captured }}</td>
+                <td class="text-right">£{{ settings.price_per_gift_aid|floatformat:4 }}</td>
+                <td class="text-right">£{{ gift_aid_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.letters_generated > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Letter Generation Service</div>
+                    <div class="item-note">Thank you and acknowledgement letters</div>
+                </td>
+                <td class="text-center">{{ invoice.letters_generated }}</td>
+                <td class="text-right">£{{ settings.price_per_letter|floatformat:4 }}</td>
+                <td class="text-right">£{{ letter_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.campaigns_created > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Campaign Setup</div>
+                    <div class="item-note">New campaign configuration</div>
+                </td>
+                <td class="text-center">{{ invoice.campaigns_created }}</td>
+                <td class="text-right">£{{ settings.price_per_campaign|floatformat:4 }}</td>
+                <td class="text-right">£{{ campaign_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.hgv_identified > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">High Gift Value (HGV) Identification</div>
+                    <div class="item-note">Premium donor identification service</div>
+                </td>
+                <td class="text-center">{{ invoice.hgv_identified }}</td>
+                <td class="text-right">£{{ settings.price_per_hgv|floatformat:4 }}</td>
+                <td class="text-right">£{{ hgv_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.lgv_identified > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Low Gift Value (LGV) Processing</div>
+                    <div class="item-note">Low value donation processing</div>
+                </td>
+                <td class="text-center">{{ invoice.lgv_identified }}</td>
+                <td class="text-right">£{{ settings.price_per_lgv|floatformat:4 }}</td>
+                <td class="text-right">£{{ lgv_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.batch_operations_completed > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Batch Processing Operations</div>
+                    <div class="item-note">Bulk data processing batches</div>
+                </td>
+                <td class="text-center">{{ invoice.batch_operations_completed }}</td>
+                <td class="text-right">£{{ settings.price_per_batch|floatformat:4 }}</td>
+                <td class="text-right">£{{ batch_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.data_files_processed > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Data File Processing</div>
+                    <div class="item-note">Import and processing of data files</div>
+                </td>
+                <td class="text-center">{{ invoice.data_files_processed }}</td>
+                <td class="text-right">£{{ settings.price_per_data_file|floatformat:4 }}</td>
+                <td class="text-right">£{{ data_file_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.templates_created > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Template Design</div>
+                    <div class="item-note">Custom letter template creation</div>
+                </td>
+                <td class="text-center">{{ invoice.templates_created }}</td>
+                <td class="text-right">£{{ settings.price_per_template|floatformat:4 }}</td>
+                <td class="text-right">£{{ template_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.reports_generated > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Report Generation</div>
+                    <div class="item-note">Custom reports and analytics</div>
+                </td>
+                <td class="text-center">{{ invoice.reports_generated }}</td>
+                <td class="text-right">£{{ settings.price_per_report|floatformat:4 }}</td>
+                <td class="text-right">£{{ report_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.donors_added > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Donor Record Creation</div>
+                    <div class="item-note">New donor database entries</div>
+                </td>
+                <td class="text-center">{{ invoice.donors_added }}</td>
+                <td class="text-right">£{{ settings.price_per_donor_added|floatformat:4 }}</td>
+                <td class="text-right">£{{ donor_added_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.donors_updated > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Donor Record Updates</div>
+                    <div class="item-note">Donor information maintenance</div>
+                </td>
+                <td class="text-center">{{ invoice.donors_updated }}</td>
+                <td class="text-right">£{{ settings.price_per_donor_updated|floatformat:4 }}</td>
+                <td class="text-right">£{{ donor_updated_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.donor_notifications_sent > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Donor Notifications</div>
+                    <div class="item-note">Email and SMS communications</div>
+                </td>
+                <td class="text-center">{{ invoice.donor_notifications_sent }}</td>
+                <td class="text-right">£{{ settings.price_per_notification|floatformat:4 }}</td>
+                <td class="text-right">£{{ notification_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.users_managed > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">User Account Management</div>
+                    <div class="item-note">User provisioning and management</div>
+                </td>
+                <td class="text-center">{{ invoice.users_managed }}</td>
+                <td class="text-right">£{{ settings.price_per_user|floatformat:4 }}</td>
+                <td class="text-right">£{{ user_line_total|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            <!-- Additional Fees -->
+            {% if invoice.service_fee > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Service Fee</div>
+                    <div class="item-note">Platform access and support</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">£{{ invoice.service_fee|floatformat:2 }}</td>
+                <td class="text-right">£{{ invoice.service_fee|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.processing_fee > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Processing Fee</div>
+                    <div class="item-note">Transaction processing charges</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">£{{ invoice.processing_fee|floatformat:2 }}</td>
+                <td class="text-right">£{{ invoice.processing_fee|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.setup_fee > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Setup Fee</div>
+                    <div class="item-note">Initial configuration and onboarding</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">£{{ invoice.setup_fee|floatformat:2 }}</td>
+                <td class="text-right">£{{ invoice.setup_fee|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            
+            {% if invoice.additional_charges > 0 %}
+            <tr>
+                <td>
+                    <div class="item-description">Additional Charges</div>
+                    <div class="item-note">Miscellaneous services</div>
+                </td>
+                <td class="text-center">1</td>
+                <td class="text-right">£{{ invoice.additional_charges|floatformat:2 }}</td>
+                <td class="text-right">£{{ invoice.additional_charges|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <!-- Summary Section -->
+    <div class="summary-section">
+        <div class="summary-table">
+            <div class="summary-row subtotal">
+                <span>Subtotal</span>
+                <span>£{{ invoice.subtotal|floatformat:2 }}</span>
+            </div>
+            
+            {% if invoice.discount_amount > 0 %}
+            <div class="summary-row discount">
+                <span>Discount</span>
+                <span>-£{{ invoice.discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            
+            {% if invoice.tax_rate > 0 %}
+            <div class="summary-row tax">
+                <span>VAT ({{ invoice.tax_rate|floatformat:1 }}%)</span>
+                <span>£{{ invoice.tax_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            
+            <div class="summary-row total">
+                <span>TOTAL</span>
+                <span>£{{ invoice.total_amount|floatformat:2 }}</span>
+            </div>
+            
+            {% if invoice.amount_paid > 0 %}
+            <div class="summary-row paid">
+                <span>Amount Paid</span>
+                <span>-£{{ invoice.amount_paid|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            
+            {% if invoice.balance_due > 0 %}
+            <div class="summary-row balance">
+                <span>Balance Due</span>
+                <span>£{{ invoice.balance_due|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Payment Info for Paid Invoices -->
+    {% if invoice.status == 'paid' %}
+    <div class="payment-info">
+        <div class="payment-title">✓ Payment Received</div>
+        <div class="payment-details">
+            {% if invoice.payment_date %}Paid on: {{ invoice.payment_date|date:"d F Y" }}<br>{% endif %}
+            {% if invoice.payment_method %}Method: {{ invoice.get_payment_method_display }}<br>{% endif %}
+            {% if invoice.payment_reference %}Reference: {{ invoice.payment_reference }}{% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Notes Section -->
+    {% if invoice.notes %}
+    <div class="notes-section">
+        <div class="notes-title">Notes</div>
+        <div class="notes-content">{{ invoice.notes|linebreaksbr }}</div>
+    </div>
+    {% endif %}
+    
+    <!-- Terms Section -->
+    {% if invoice.terms_and_conditions %}
+    <div class="terms-section">
+        <div class="terms-title">Terms & Conditions</div>
+        <div class="terms-content">{{ invoice.terms_and_conditions }}</div>
+    </div>
+    {% endif %}
+</body>
+</html>

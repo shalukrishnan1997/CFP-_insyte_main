@@ -1,0 +1,623 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block title %}Invoices{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="page-header-section flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex items-center gap-4 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-900">Invoices</h1>
+            <!-- Metric Tags -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200" title="Total Invoices">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {{ stats.total_count }} Total
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-md border border-red-200" title="Outstanding Balance">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    £{{ stats.outstanding_balance|floatformat:2 }} Pending
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200" title="This Month">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    {{ stats.current_month_count }} This Month
+                </span>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'custom_admin:invoice_create' %}" 
+               class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-all">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create Invoice
+            </a>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div x-data="{ 
+        showFilters: {% if search_query or client_filter or status_filter or date_from %}true{% else %}false{% endif %},
+        clientDropOpen: false,
+        selectedClientVal: '{{ client_filter|default:'' }}',
+        selectedClientName: '{% if client_filter %}{% for c in all_clients %}{% if c.id|stringformat:"s" == client_filter|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}All Clients{% endif %}',
+        statusDropOpen: false,
+        selectedStatusVal: '{{ status_filter|default:'' }}',
+        selectedStatusName: '{% if status_filter == 'draft' %}Draft{% elif status_filter == 'issued' %}Issued{% elif status_filter == 'paid' %}Paid{% elif status_filter == 'overdue' %}Overdue{% elif status_filter == 'cancelled' %}Cancelled{% else %}All Statuses{% endif %}'
+    }">
+        <div class="workspace-panel mb-6">
+            {% if search_query or client_filter or status_filter or date_from %}
+            {% include "components/admin/filter_toggle_button.html" with active_badge=True button_class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-t-md" %}
+            {% else %}
+            {% include "components/admin/filter_toggle_button.html" with active_badge=False button_class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-t-md" %}
+            {% endif %}
+
+            <div x-show="showFilters" x-collapse class="border-t border-gray-200 p-6" style="overflow: visible;">
+                <form method="get" action="{% url 'custom_admin:invoice_list' %}" class="space-y-6" style="overflow: visible;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Search -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Search Invoices</label>
+                            <div class="relative">
+                                <input type="text" name="search" value="{{ search_query }}"
+                                    class="block w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    placeholder="Invoice number, notes...">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Client Filter - Elite Dropdown -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Client</label>
+                            <button @click="clientDropOpen = !clientDropOpen" @click.away="clientDropOpen = false" type="button"
+                                class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style="height: 38px;">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <svg class="w-4 h-4 text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                                    </svg>
+                                    <span class="truncate" x-text="selectedClientName || 'All Clients'">All Clients</span>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': clientDropOpen }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div x-show="clientDropOpen" x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="workspace-dropdown absolute left-0 right-0 mt-2 py-1 z-50 max-h-64 overflow-y-auto"
+                                x-cloak>
+                                <button type="button"
+                                    @click="selectedClientVal = ''; selectedClientName = 'All Clients'; clientDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="!selectedClientVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <svg class="w-4 h-4" :class="!selectedClientVal ? 'text-blue-600' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    All Clients
+                                </button>
+                                {% for client in all_clients %}
+                                <button type="button"
+                                    @click="selectedClientVal = '{{ client.id }}'; selectedClientName = '{{ client.name|escapejs }}'; clientDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedClientVal === '{{ client.id|stringformat:'s' }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
+                                    </svg>
+                                    {{ client.name }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="client" x-model="selectedClientVal">
+                        </div>
+
+                        <!-- Status Filter - Elite Dropdown -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Status Filter</label>
+                            <button @click="statusDropOpen = !statusDropOpen" @click.away="statusDropOpen = false" type="button"
+                                class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style="height: 38px;">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="truncate" x-text="selectedStatusName || 'All Statuses'">All Statuses</span>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': statusDropOpen }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div x-show="statusDropOpen" x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="workspace-dropdown absolute left-0 right-0 mt-2 py-1 z-50 overflow-hidden"
+                                x-cloak>
+                                <button type="button"
+                                    @click="selectedStatusVal = ''; selectedStatusName = 'All Statuses'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="!selectedStatusVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <svg class="w-4 h-4" :class="!selectedStatusVal ? 'text-blue-600' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    All Statuses
+                                </button>
+                                <button type="button"
+                                    @click="selectedStatusVal = 'draft'; selectedStatusName = 'Draft'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedStatusVal === 'draft' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <div class="w-2 h-2 rounded-full bg-gray-400"></div>
+                                    Draft
+                                </button>
+                                <button type="button"
+                                    @click="selectedStatusVal = 'issued'; selectedStatusName = 'Issued'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedStatusVal === 'issued' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+                                    Issued
+                                </button>
+                                <button type="button"
+                                    @click="selectedStatusVal = 'paid'; selectedStatusName = 'Paid'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedStatusVal === 'paid' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                    Paid
+                                </button>
+                                <button type="button"
+                                    @click="selectedStatusVal = 'overdue'; selectedStatusName = 'Overdue'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedStatusVal === 'overdue' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                                    Overdue
+                                </button>
+                                <button type="button"
+                                    @click="selectedStatusVal = 'cancelled'; selectedStatusName = 'Cancelled'; statusDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedStatusVal === 'cancelled' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                    Cancelled
+                                </button>
+                            </div>
+                            <input type="hidden" name="status" x-model="selectedStatusVal">
+                        </div>
+
+                        <!-- Date From -->
+                        <div>
+                            <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1.5">From Date</label>
+                            <input type="date" name="date_from" id="date_from" value="{{ date_from }}" 
+                                class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Filter Actions -->
+                    <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
+                        <button type="submit"
+                            class="inline-flex items-center px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors text-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                            Apply Filters
+                        </button>
+
+                        {% if search_query or client_filter or status_filter or date_from %}
+                        <a href="{% url 'custom_admin:invoice_list' %}"
+                            class="inline-flex items-center px-5 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-md transition-colors text-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Clear All
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice List - Card View -->
+    <div class="space-y-4">
+        {% for invoice in invoices %}
+        <div class="workspace-panel border border-gray-200">
+            <div class="p-6">
+                <div class="flex items-start justify-between">
+                    <!-- Left Section: Invoice Info -->
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-3">
+                            <h3 class="text-xl font-bold text-gray-900">
+                                {{ invoice.invoice_number }}
+                            </h3>
+                            <span class="px-3 py-1 inline-flex text-sm font-semibold rounded-full
+                                {% if invoice.status == 'draft' %}bg-gray-100 text-gray-800 border border-gray-300
+                                {% elif invoice.status == 'issued' %}bg-blue-100 text-blue-800 border border-blue-300
+                                {% elif invoice.status == 'paid' %}bg-green-100 text-green-800 border border-green-300
+                                {% elif invoice.status == 'overdue' %}bg-red-100 text-red-800 border border-red-300
+                                {% elif invoice.status == 'cancelled' %}bg-yellow-100 text-yellow-800 border border-yellow-300
+                                {% endif %}">
+                                {{ invoice.get_status_display }}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Client Info -->
+                            <div class="flex items-start gap-2">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Client</p>
+                                    <p class="text-sm font-semibold text-gray-900">{{ invoice.client.name }}</p>
+                                </div>
+                            </div>
+
+                            <!-- Campaign -->
+                            <div class="flex items-start gap-2">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                </svg>
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Campaign</p>
+                                    <p class="text-sm font-semibold text-gray-900">{{ invoice.campaign.title|truncatewords:4 }}</p>
+                                </div>
+                            </div>
+
+                            <!-- Dates -->
+                            <div class="flex items-start gap-2">
+                                <svg class="w-5 h-5 text-gray-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Billing Period</p>
+                                    <p class="text-sm font-medium text-gray-900">
+                                        {{ invoice.billing_period_start|date:"d M" }} - {{ invoice.billing_period_end|date:"d M Y" }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Due Date -->
+                            <div class="flex items-start gap-2">
+                                <svg class="w-5 h-5 {% if invoice.status == 'overdue' %}text-red-500{% else %}text-gray-400{% endif %} mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Due Date</p>
+                                    <p class="text-sm font-medium {% if invoice.status == 'overdue' %}text-red-600{% else %}text-gray-900{% endif %}">
+                                        {{ invoice.due_date|date:"d M Y" }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Section: Financial Summary -->
+                    <div class="ml-6 text-right">
+                        <div class="bg-linear-to-br from-blue-50 to-blue-100 rounded-md p-4 border border-blue-200">
+                            <p class="text-xs text-blue-700 font-medium mb-1">Total Amount</p>
+                            <p class="text-2xl font-bold text-blue-900">£{{ invoice.total_amount|floatformat:2 }}</p>
+                            
+                            {% if invoice.balance_due > 0 %}
+                            <div class="mt-2 pt-2 border-t border-blue-200">
+                                <p class="text-xs text-red-600 font-medium">Balance Due</p>
+                                <p class="text-lg font-bold text-red-700">£{{ invoice.balance_due|floatformat:2 }}</p>
+                            </div>
+                            {% else %}
+                            <div class="mt-2 pt-2 border-t border-blue-200">
+                                <p class="text-xs text-green-600 font-medium flex items-center justify-end gap-1">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Fully Paid
+                                </p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
+                    <div class="text-sm text-gray-500">
+                        <span class="font-medium">Issued:</span> {{ invoice.issue_date|date:"d M Y" }}
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <a href="{% url 'custom_admin:invoice_detail' invoice.id %}" 
+                           class="px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors text-sm font-medium border border-blue-200">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            View Details
+                        </a>
+                        
+                        <a href="{% url 'custom_admin:invoice_edit' invoice.id %}" 
+                           class="px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors text-sm font-medium border border-blue-200">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                            Edit
+                        </a>
+
+                        <a href="{% url 'custom_admin:invoice_generate_pdf' invoice.id %}"
+                           hx-indicator="#global-spinner"
+                           class="px-4 py-2 bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors text-sm font-medium border border-green-200">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            PDF
+                        </a>
+                        
+                        <!-- Actions Dropdown -->
+                        <div x-data="{ open: false }" class="relative z-10">
+                            <button type="button" @click="open = !open" 
+                                    class="px-4 py-2 bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 transition-colors text-sm font-medium border border-gray-300 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                </svg>
+                                Actions
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            
+                            <div x-show="open" @click.away="open = false" x-transition
+                                 class="workspace-dropdown absolute right-0 mt-2 w-48 z-50">
+                                <div class="py-1">
+                                    <p class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Change Status</p>
+                                    
+                                    {% if invoice.status != 'paid' %}
+                                    <button type="button" onclick="changeStatus('{{ invoice.id }}', 'paid', event)"
+                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'paid' %}bg-gray-100 font-semibold{% endif %}">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-2"></span>Mark Paid
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if invoice.status != 'draft' %}
+                                    <button type="button" onclick="changeStatus('{{ invoice.id }}', 'draft', event)"
+                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'draft' %}bg-gray-100 font-semibold{% endif %}">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2"></span>Draft
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if invoice.status != 'issued' %}
+                                    <button type="button" onclick="changeStatus('{{ invoice.id }}', 'issued', event)"
+                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'issued' %}bg-gray-100 font-semibold{% endif %}">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-2"></span>Issued
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if invoice.status != 'overdue' %}
+                                    <button type="button" onclick="changeStatus('{{ invoice.id }}', 'overdue', event)"
+                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'overdue' %}bg-gray-100 font-semibold{% endif %}">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-2"></span>Overdue
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if invoice.status != 'cancelled' %}
+                                    <button type="button" onclick="changeStatus('{{ invoice.id }}', 'cancelled', event)"
+                                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if invoice.status == 'cancelled' %}bg-gray-100 font-semibold{% endif %}">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-2"></span>Cancelled
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="px-6 py-12 text-center">
+                        <div class="text-gray-500">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p class="mt-4 text-lg font-medium">No invoices found</p>
+                            <p class="mt-2 text-sm">Create your first invoice to get started</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if invoices.has_other_pages %}
+    <div class="flex items-center justify-between bg-white px-6 py-4 rounded-md border border-gray-200">
+        <div class="flex items-center text-sm text-gray-700">
+            Showing page {{ invoices.number }} of {{ invoices.paginator.num_pages }}
+            ({{ invoices.paginator.count }} total invoices)
+        </div>
+        <nav class="flex gap-2">
+            {% if invoices.has_previous %}
+            <a href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}" 
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium">
+                First
+            </a>
+            <a href="?page={{ invoices.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}" 
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium">
+                Previous
+            </a>
+            {% endif %}
+            
+            <span class="px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium">
+                {{ invoices.number }}
+            </span>
+            
+            {% if invoices.has_next %}
+            <a href="?page={{ invoices.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}" 
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium">
+                Next
+            </a>
+            <a href="?page={{ invoices.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}" 
+               class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-sm font-medium">
+                Last
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Status Confirmation Modal -->
+<div id="statusConfirmModal" class="fixed inset-0 overflow-y-auto h-full w-full hidden z-50" style="background-color: rgba(0, 0, 0, 0.5);">
+  <div class="flex items-center justify-center min-h-screen px-4">
+    <div class="relative w-full max-w-md p-6 rounded-md bg-white border border-gray-200">
+      <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+        <h3 class="text-xl font-semibold text-gray-900">Confirm Status Change</h3>
+        <button type="button" onclick="closeStatusModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="mt-4 space-y-4">
+        <div class="flex items-center gap-3 p-4 bg-blue-50 rounded-md border border-blue-100">
+          <div class="shrink-0">
+            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-gray-900" id="confirmMessage"></p>
+            <p class="text-xs text-gray-600 mt-1">This action will update the invoice status.</p>
+          </div>
+        </div>
+      </div>
+      
+      <form id="statusChangeForm" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="status" id="statusInput">
+        
+        <div class="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-200">
+          <button type="button" onclick="closeStatusModal()" 
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit" 
+                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+            Confirm Change
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(() => {
+    const markPaidUrlTemplate = '{% url "custom_admin:invoice_mark_paid" "00000000-0000-0000-0000-000000000000" %}';
+    const changeStatusUrlTemplate = '{% url "custom_admin:invoice_change_status" "00000000-0000-0000-0000-000000000000" %}';
+    let currentInvoiceId = null;
+    let currentStatus = null;
+
+    function buildInvoiceActionUrl(template, invoiceId) {
+        return template.replace('00000000-0000-0000-0000-000000000000', invoiceId);
+    }
+
+    window.changeStatus = function changeStatus(invoiceId, status, event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const statusLabels = {
+            'paid': 'Paid',
+            'draft': 'Draft',
+            'issued': 'Issued',
+            'overdue': 'Overdue',
+            'cancelled': 'Cancelled'
+        };
+
+        currentInvoiceId = invoiceId;
+        currentStatus = status;
+
+        const confirmMessage = status === 'paid'
+            ? 'Mark this invoice as paid?'
+            : `Change invoice status to ${statusLabels[status]}?`;
+
+        document.getElementById('confirmMessage').textContent = confirmMessage;
+        document.getElementById('statusInput').value = status;
+
+        if (status === 'paid') {
+            document.getElementById('statusChangeForm').action = buildInvoiceActionUrl(markPaidUrlTemplate, invoiceId);
+        } else {
+            document.getElementById('statusChangeForm').action = buildInvoiceActionUrl(changeStatusUrlTemplate, invoiceId);
+        }
+
+        document.getElementById('statusConfirmModal').classList.remove('hidden');
+    };
+
+    window.closeStatusModal = function closeStatusModal() {
+        document.getElementById('statusConfirmModal').classList.add('hidden');
+        currentInvoiceId = null;
+        currentStatus = null;
+    };
+
+    function initializeInvoiceListPage(root = document) {
+        const modal = root.getElementById('statusConfirmModal');
+        if (modal && modal.dataset.clickBound !== 'true') {
+            modal.addEventListener('click', function (e) {
+                if (e.target === this) {
+                    window.closeStatusModal();
+                }
+            });
+            modal.dataset.clickBound = 'true';
+        }
+
+        const dateFromInput = root.querySelector('#date_from');
+        if (
+            dateFromInput
+            && typeof flatpickr !== 'undefined'
+            && dateFromInput.dataset.flatpickrInitialized !== 'true'
+        ) {
+            flatpickr(dateFromInput, {
+                dateFormat: "d/m/Y",
+                altInput: true,
+                altFormat: "d/m/Y",
+                allowInput: true
+            });
+            dateFromInput.dataset.flatpickrInitialized = 'true';
+        }
+    }
+
+    if (!window.__invoiceListHtmxInitBound) {
+        document.body.addEventListener('htmx:load', function (event) {
+            initializeInvoiceListPage(event.target);
+        });
+        window.__invoiceListHtmxInitBound = true;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function handleInvoiceListReady() {
+            initializeInvoiceListPage(document);
+        }, { once: true });
+    } else {
+        initializeInvoiceListPage(document);
+    }
+})();
+</script>
+{% endblock %}

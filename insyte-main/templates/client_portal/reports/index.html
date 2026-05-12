@@ -1,0 +1,92 @@
+{% extends "client_portal/base.html" %}
+{% load static %}
+
+{% block page_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+     x-data="portalReports()"
+     x-cloak>
+
+  <!-- Page header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">Reports &amp; Analytics</h1>
+    <p class="mt-1.5 text-sm text-gray-500">
+      {{ client.name }} — select a report below to configure filters and view results.
+    </p>
+  </div>
+
+  <!-- HTMX status indicators -->
+  <div id="filter-loading" class="htmx-indicator flex items-center gap-2 text-sm text-blue-600 mb-4">
+    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+    </svg>
+    Loading filters…
+  </div>
+  <div id="results-loading" class="htmx-indicator flex items-center gap-2 text-sm text-blue-600 mb-4">
+    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+    </svg>
+    Generating report…
+  </div>
+
+  <!-- Category cards -->
+  {% for category in categories %}
+  <div class="mb-6">
+    <div class="flex items-center gap-2 mb-3">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ category.label }}</h2>
+      <span class="text-xs text-gray-400">{{ category.description }}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      {% for report in category.report_list %}
+      <button type="button"
+              hx-get="{% url 'client_portal:reports_filter_partial' report.key %}"
+              hx-target="#filter-panel-slot"
+              hx-swap="innerHTML"
+              hx-indicator="#filter-loading"
+              @click="selectedReport = '{{ report.key }}'; $nextTick(() => { const el = document.getElementById('filter-panel-slot'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); })"
+              :class="selectedReport === '{{ report.key }}' ? '{{ report.color_bg }} ring-2 ring-blue-400 shadow-md' : 'bg-white hover:shadow-md hover:border-gray-300 shadow-sm'"
+              class="relative flex flex-col items-start gap-2 p-4 border border-gray-200 rounded-xl transition-all text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="w-9 h-9 rounded-lg {{ report.color_bg }} flex items-center justify-center flex-shrink-0">
+          <span class="{{ report.color_icon }}">
+            {% with icon=report.icon %}
+            {% include "admin/reports/partials/_report_icon.html" %}
+            {% endwith %}
+          </span>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-gray-900 leading-tight">{{ report.short_title }}</p>
+          <p class="text-xs text-gray-500 mt-0.5 leading-tight line-clamp-2">{{ report.description }}</p>
+        </div>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Filter panel (loaded via HTMX on card click) -->
+  <div id="filter-panel-slot" class="mt-6 scroll-mt-4">
+    <!-- placeholder shown before any selection -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-400 text-sm">
+      <svg class="w-10 h-10 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+      </svg>
+      Click a report above to configure filters.
+    </div>
+  </div>
+
+  <!-- Results panel (populated by filter form submission) -->
+  <div id="results-panel" class="mt-6"></div>
+
+</div>
+
+<script>
+function portalReports() {
+  return {
+    selectedReport: '',
+  };
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.0/dist/apexcharts.min.js"></script>
+{% endblock %}

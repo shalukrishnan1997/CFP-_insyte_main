@@ -1,0 +1,71 @@
+{% load static %}
+{# Client portal — filter panel partial loaded via HTMX when a report card is clicked #}
+<div id="filter-panel-inner"
+     x-data="portalFilterPanel()"
+     x-cloak
+     class="bg-white rounded-xl shadow-sm border border-gray-200">
+  {% include "components/reports/filter_header.html" with portal=True %}
+
+  <!-- Filter form -->
+  <form id="portalReportFilterForm"
+        hx-post="{% url 'client_portal:reports_results_partial' %}"
+        hx-target="#results-panel"
+        hx-swap="innerHTML"
+        hx-indicator="#results-loading"
+        class="p-6">
+    {% csrf_token %}
+    <input type="hidden" name="report_type" value="{{ report_type }}">
+    {# client_id is always locked to the portal user's client (enforced server-side) #}
+    <input type="hidden" name="client_id" value="{{ client_id }}">
+    <input type="hidden" name="scope" value="client">
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <!-- Campaign filter -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Campaign</label>
+        <select name="campaign_id"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="">All Campaigns</option>
+          {% for camp in all_campaigns %}
+          <option value="{{ camp.id }}" {% if campaign_id == camp.id|stringformat:"s" %}selected{% endif %}>
+            {{ camp.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% include "components/reports/common_filter_fields.html" with use_uk_date_fields=False %}
+
+    </div>
+
+    <div class="mt-5 flex items-center gap-3">
+      <button type="submit"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Generate Report
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<script>
+function portalFilterPanel() {
+  return {
+    clearReportPanels() {
+      const filterSlot = document.getElementById('filter-panel-slot');
+      const resultsPanel = document.getElementById('results-panel');
+      if (filterSlot) {
+        filterSlot.replaceChildren();
+      }
+      if (resultsPanel) {
+        resultsPanel.replaceChildren();
+      }
+    },
+  };
+}
+</script>

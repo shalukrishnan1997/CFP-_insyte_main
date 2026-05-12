@@ -1,0 +1,103 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block page_content %}
+<div class="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Edit Paying-In Slip</h1>
+            <p class="mt-1 text-sm text-gray-500">
+                Slip ID: #{{ slip.id }} • Created on {{ slip.created_at|date:"d/m/Y" }}
+            </p>
+        </div>
+        <a href="{% url 'custom_admin:slip_detail' slip.id %}" class="text-sm text-blue-600 hover:text-blue-800">
+            &larr; Back to Slip Details
+        </a>
+    </div>
+
+    {% if slip.status != 'draft' %}
+    <div class="rounded-md bg-yellow-50 p-4 mb-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">Warning</h3>
+                <div class="mt-2 text-sm text-yellow-700">
+                    <p>
+                        This slip is in <strong>{{ slip.get_status_display }}</strong> status.
+                        Editing details might affect reconciliation. Proceed with caution.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            <!-- Slip Number -->
+            <div>
+                <label for="slip_number" class="block text-sm font-medium text-gray-700">Slip Number</label>
+                <div class="mt-1">
+                    <input type="text" name="slip_number" id="slip_number" value="{{ slip.slip_number }}"
+                        class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        required>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">The unique identifier from the bank paying-in book.</p>
+            </div>
+
+            <!-- Banking Date -->
+            <div>
+                <label for="banking_date" class="block text-sm font-medium text-gray-700">Banking Date</label>
+                <div class="mt-1">
+                    <input type="date" name="banking_date" id="banking_date"
+                        value="{{ slip.banking_date|date:'Y-m-d' }}"
+                        class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        required>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div>
+                <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                <div class="mt-1">
+                    <textarea name="notes" id="notes" rows="4"
+                        class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md">{{ slip.notes }}</textarea>
+                </div>
+            </div>
+
+            <!-- Summary Info (Read Only) -->
+            <div class="bg-gray-50 -mx-6 -mb-6 px-6 py-4 border-t border-gray-200">
+                <div class="grid grid-cols-2 gap-4 text-sm text-gray-500">
+                    <div>
+                        <span class="block text-xs font-medium text-gray-400 uppercase">Total Amount</span>
+                        <span class="block text-lg font-semibold text-gray-900">£{{ slip.total_amount|floatformat:2
+                            }}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="block text-xs font-medium text-gray-400 uppercase">Donations</span>
+                        <span class="block text-lg font-semibold text-gray-900">{{ slip.donations.count }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-gray-200 flex justify-end gap-3">
+                <a href="{% url 'custom_admin:slip_list' %}"
+                    class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Cancel
+                </a>
+                <button type="submit"
+                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

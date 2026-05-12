@@ -1,0 +1,241 @@
+{% extends 'layouts/admin_layout.html' %}
+{% block title %}Letter Batches - {{ campaign.name }}{% endblock %}
+{% block page_content %}
+<div class="mb-6 flex justify-between items-start">
+  <div>
+    <h1 class="text-2xl font-bold mb-2">Letter Batches</h1>
+    <p class="text-gray-600">Manage letter generation batches for {{ campaign.name }}.</p>
+  </div>
+  <div class="flex gap-3">
+    {% if stats.pending > 0 %}
+    <a href="{% url 'custom_admin:letter_print_console' %}?client={{ campaign.client.id }}&campaign={{ campaign.id }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center">
+      <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+      </svg>
+      Generate New Batch
+    </a>
+    {% endif %}
+    {% if stats.failed > 0 %}
+    <form method="post" action="{% url 'custom_admin:reset_failed_letters' campaign.id %}" class="inline"
+          onsubmit="return confirm('Reset {{ stats.failed }} failed letter(s) back to pending so they can be retried?');">
+      {% csrf_token %}
+      <button type="submit" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        Reset {{ stats.failed }} Failed
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="text-sm text-gray-500">Total Donations</div>
+    <div class="text-2xl font-bold text-gray-900">{{ stats.total|default:0 }}</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="text-sm text-gray-500">Pending</div>
+    <div class="text-2xl font-bold text-yellow-600">{{ stats.pending|default:0 }}</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="text-sm text-gray-500">Generated</div>
+    <div class="text-2xl font-bold text-green-600">{{ stats.generated|default:0 }}</div>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="text-sm text-gray-500">Failed</div>
+    <div class="text-2xl font-bold text-red-600">{{ stats.failed|default:0 }}</div>
+  </div>
+</div>
+
+<!-- Progress Bar (if any batch is processing) -->
+{% for batch in batches %}
+  {% if batch.status == 'processing' %}
+  <div class="bg-blue-50 rounded-lg p-4 mb-6" id="processing-batch-{{ batch.id }}">
+    <div class="flex items-center justify-between mb-2">
+      <span class="font-medium text-blue-900">Batch #{{ batch.batch_number }} is processing...</span>
+      <span class="text-sm text-blue-600" id="progress-text-{{ batch.id }}">{{ batch.progress_percent }}%</span>
+    </div>
+    <div class="w-full bg-blue-200 rounded-full h-3">
+      <div id="progress-bar-{{ batch.id }}" class="bg-blue-600 h-3 rounded-full transition-all duration-500" style="width: {{ batch.progress_percent }}%"></div>
+    </div>
+    <div class="mt-2 flex justify-between text-sm text-blue-700">
+      <span>{{ batch.generated_count }} / {{ batch.total_letters }} letters</span>
+      <span>{{ batch.file_count }} files generated</span>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+<!-- Batches Table -->
+<div class="bg-white rounded-lg shadow">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h3 class="text-lg font-semibold">All Batches</h3>
+  </div>
+  
+  {% if batches %}
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Letters</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Files</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200">
+        {% for batch in batches %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="font-medium text-gray-900">#{{ batch.batch_number }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            {% if batch.status == 'completed' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">✓ Completed</span>
+            {% elif batch.status == 'processing' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">⟳ Processing</span>
+            {% elif batch.status == 'pending' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">⏱ Pending</span>
+            {% elif batch.status == 'failed' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">✗ Failed</span>
+            {% elif batch.status == 'cancelled' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">⊘ Cancelled</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex items-center">
+              <div class="w-24 bg-gray-200 rounded-full h-2 mr-2">
+                <div class="bg-blue-600 h-2 rounded-full" style="width: {{ batch.progress_percent }}%"></div>
+              </div>
+              <span class="text-sm text-gray-600">{{ batch.progress_percent }}%</span>
+            </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+            <span class="text-green-600">{{ batch.generated_count }}</span>
+            /
+            <span>{{ batch.total_letters }}</span>
+            {% if batch.failed_count > 0 %}
+              <span class="text-red-600 ml-1">({{ batch.failed_count }} failed)</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+            {{ batch.file_count }} file{% if batch.file_count != 1 %}s{% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ batch.created_at|date:"d M Y H:i" }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <div class="flex gap-2">
+              <a href="{% url 'custom_admin:letter_batch_detail' batch.id %}" class="text-blue-600 hover:text-blue-800">
+                View
+              </a>
+              {% if batch.status == 'processing' or batch.status == 'pending' %}
+                <form method="post" action="{% url 'custom_admin:cancel_batch' batch.id %}" class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="text-red-600 hover:text-red-800">Cancel</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="p-12 text-center text-gray-500">
+    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    </svg>
+    <p class="mt-2 text-lg">No letter batches yet</p>
+    <p class="mt-1 text-sm">Start by generating letters for this campaign.</p>
+    <a href="{% url 'custom_admin:letter_print_console' %}?client={{ campaign.client.id }}&campaign={{ campaign.id }}" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+      Generate Letters
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{% if messages %}
+  <div class="mt-6">
+    {% for message in messages %}
+      <div class="rounded-lg p-4 {% if message.tags == 'success' %}bg-green-50 text-green-800{% elif message.tags == 'error' %}bg-red-50 text-red-800{% else %}bg-blue-50 text-blue-800{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<script>
+(() => {
+  const letterBatchStatusUrlTemplate = '{% url "custom_admin:letter_batch_status_api" "00000000-0000-0000-0000-000000000000" %}';
+
+  function pollBatchStatus(batchId) {
+    const interval = setInterval(async function() {
+      try {
+        const response = await fetch(
+          letterBatchStatusUrlTemplate.replace('00000000-0000-0000-0000-000000000000', batchId)
+        );
+        const data = await response.json();
+
+        if (!data.success) {
+          clearInterval(interval);
+          return;
+        }
+
+        const progressBar = document.getElementById(`progress-bar-${batchId}`);
+        const progressText = document.getElementById(`progress-text-${batchId}`);
+
+        if (progressBar) {
+          progressBar.style.width = `${data.progress_percent}%`;
+        }
+        if (progressText) {
+          progressText.textContent = `${data.progress_percent}%`;
+        }
+
+        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+          clearInterval(interval);
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error polling batch status:', error);
+      }
+    }, 3000);
+  }
+
+  function initializeLetterBatchPolling(root = document) {
+    const processingBatches = root.querySelectorAll('[id^="processing-batch-"]');
+
+    processingBatches.forEach(function(element) {
+      if (element.dataset.pollingBound === 'true') {
+        return;
+      }
+      const batchId = element.id.replace('processing-batch-', '');
+      pollBatchStatus(batchId);
+      element.dataset.pollingBound = 'true';
+    });
+  }
+
+  if (!window.__letterBatchListInitBound) {
+    document.body.addEventListener('htmx:load', function (event) {
+      initializeLetterBatchPolling(event.target);
+    });
+    window.__letterBatchListInitBound = true;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function handleLetterBatchListReady() {
+      initializeLetterBatchPolling(document);
+    }, { once: true });
+  } else {
+    initializeLetterBatchPolling(document);
+  }
+})();
+</script>
+{% endblock %}

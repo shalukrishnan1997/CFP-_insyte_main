@@ -1,0 +1,276 @@
+{% extends 'layouts/admin_layout.html' %}
+{% block title %}Batch #{{ batch.batch_number }} - {{ campaign.name }}{% endblock %}
+{% block page_content %}
+<div class="mb-6 flex justify-between items-start">
+  <div>
+    <h1 class="text-2xl font-bold mb-2">Letter Batch #{{ batch.batch_number }}</h1>
+    <p class="text-gray-600">{{ campaign.name }} - {{ batch.template.file.name }}</p>
+  </div>
+  <div class="flex gap-3">
+    <a href="{% url 'custom_admin:letter_batches' campaign.id %}" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium">
+      ← Back to Batches
+    </a>
+    {% if batch.status == 'processing' or batch.status == 'pending' %}
+    <form method="post" action="{% url 'custom_admin:cancel_batch' batch.id %}"
+          onsubmit="return confirm('Cancel this batch? Any in-flight work will stop.');">
+      {% csrf_token %}
+      <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+        Cancel Batch
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Status Card -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+  <div class="lg:col-span-2">
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold mb-4">Batch Progress</h3>
+      
+      <!-- Status Badge -->
+      <div class="mb-4">
+        {% if batch.status == 'completed' %}
+          <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+            ✓ Completed
+          </span>
+        {% elif batch.status == 'processing' %}
+          <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">
+            ⟳ Processing
+          </span>
+        {% elif batch.status == 'pending' %}
+          <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">
+            ⏱ Pending
+          </span>
+        {% elif batch.status == 'failed' %}
+          <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+            ✗ Failed
+          </span>
+        {% elif batch.status == 'cancelled' %}
+          <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+            ⊘ Cancelled
+          </span>
+        {% endif %}
+      </div>
+      
+      <!-- Progress Bar -->
+      <div class="mb-4" id="progress-section">
+        <div class="flex justify-between mb-1">
+          <span class="text-sm font-medium text-gray-700">Progress</span>
+          <span class="text-sm font-medium text-gray-700" id="progress-percent">{{ batch.progress_percent }}%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-4">
+          <div id="progress-bar" class="h-4 rounded-full transition-all duration-500 {% if batch.status == 'completed' %}bg-green-600{% elif batch.status == 'failed' %}bg-red-600{% else %}bg-blue-600{% endif %}" style="width: {{ batch.progress_percent }}%"></div>
+        </div>
+      </div>
+      
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-4 gap-4 mt-6">
+        <div class="text-center p-4 bg-gray-50 rounded-lg">
+          <div class="text-2xl font-bold text-gray-900" id="total-letters">{{ batch.total_letters }}</div>
+          <div class="text-sm text-gray-500">Total</div>
+        </div>
+        <div class="text-center p-4 bg-green-50 rounded-lg">
+          <div class="text-2xl font-bold text-green-600" id="generated-count">{{ batch.generated_count }}</div>
+          <div class="text-sm text-gray-500">Generated</div>
+        </div>
+        <div class="text-center p-4 bg-red-50 rounded-lg">
+          <div class="text-2xl font-bold text-red-600" id="failed-count">{{ batch.failed_count }}</div>
+          <div class="text-sm text-gray-500">Failed</div>
+        </div>
+        <div class="text-center p-4 bg-blue-50 rounded-lg">
+          <div class="text-2xl font-bold text-blue-600" id="file-count">{{ batch.file_count }}</div>
+          <div class="text-sm text-gray-500">Files</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="lg:col-span-1">
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold mb-4">Details</h3>
+      <dl class="space-y-3">
+        <div>
+          <dt class="text-sm text-gray-500">Created By</dt>
+          <dd class="font-medium">{{ batch.created_by.get_full_name|default:batch.created_by.username }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-gray-500">Created At</dt>
+          <dd class="font-medium">{{ batch.created_at|date:"d M Y H:i" }}</dd>
+        </div>
+        {% if batch.started_at %}
+        <div>
+          <dt class="text-sm text-gray-500">Started At</dt>
+          <dd class="font-medium">{{ batch.started_at|date:"d M Y H:i" }}</dd>
+        </div>
+        {% endif %}
+        {% if batch.completed_at %}
+        <div>
+          <dt class="text-sm text-gray-500">Completed At</dt>
+          <dd class="font-medium">{{ batch.completed_at|date:"d M Y H:i" }}</dd>
+        </div>
+        {% endif %}
+        <div>
+          <dt class="text-sm text-gray-500">Letters Per File</dt>
+          <dd class="font-medium">{{ batch.letters_per_file }}</dd>
+        </div>
+        {% if batch.celery_task_id %}
+        <div>
+          <dt class="text-sm text-gray-500">Task ID</dt>
+          <dd class="font-mono text-xs text-gray-600 truncate">{{ batch.celery_task_id }}</dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+</div>
+
+<!-- Generated Files -->
+{% if batch.output_files %}
+<div class="bg-white rounded-lg shadow mb-6">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h3 class="text-lg font-semibold">Generated Files</h3>
+    <p class="text-sm text-gray-500 mt-1">Click to download merged letter documents</p>
+  </div>
+  <div class="p-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for file_path in batch.output_files %}
+      <a href="{% url 'custom_admin:download_batch_file' batch.id forloop.counter0 %}" hx-boost="false" class="flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+        <div class="flex-shrink-0">
+          <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+        </div>
+        <div class="ml-4 flex-1 min-w-0">
+          <p class="font-medium text-gray-900 truncate">File {{ forloop.counter }}</p>
+          <p class="text-sm text-gray-500">{{ batch.letters_per_file }} letters</p>
+        </div>
+        <div class="ml-2">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Error Log -->
+{% if batch.error_log %}
+<div class="bg-white rounded-lg shadow mb-6">
+  <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+    <h3 class="text-lg font-semibold text-red-600">Errors ({{ batch.error_log|length }})</h3>
+  </div>
+  <div class="p-6">
+    <div class="bg-red-50 rounded-lg p-4 max-h-60 overflow-y-auto">
+      <ul class="space-y-2">
+        {% for error in batch.error_log %}
+        <li class="text-sm text-red-700 font-mono">{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Donations in this batch -->
+{% if donations %}
+<div class="bg-white rounded-lg shadow">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h3 class="text-lg font-semibold">Recent Donations in Batch</h3>
+    <p class="text-sm text-gray-500 mt-1">Showing first 100 donations</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donor</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Letter Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Generated At</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200">
+        {% for donation in donations %}
+        <tr>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            {% if donation.donor %}
+              {{ donation.donor.first_name }} {{ donation.donor.last_name }}
+            {% elif donation.data_file_donor %}
+              {{ donation.data_file_donor.first_name }} {{ donation.data_file_donor.last_name }}
+            {% else %}
+              <span class="text-gray-400">No donor</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+            £{{ donation.amount|floatformat:2 }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ donation.donation_date|date:"d M Y"|default:"-" }}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            {% if donation.letter_status == 'generated' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Generated</span>
+            {% elif donation.letter_status == 'failed' %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Failed</span>
+            {% else %}
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">{{ donation.letter_status|title }}</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {{ donation.letter_generated_at|date:"d M Y H:i"|default:"-" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if messages %}
+  <div class="mt-6">
+    {% for message in messages %}
+      <div class="rounded-lg p-4 {% if message.tags == 'success' %}bg-green-50 text-green-800{% elif message.tags == 'error' %}bg-red-50 text-red-800{% else %}bg-blue-50 text-blue-800{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if batch.status == 'processing' %}
+<script>
+(() => {
+  const letterBatchStatusUrl = '{% url "custom_admin:letter_batch_status_api" batch.id %}';
+
+  const pollInterval = setInterval(async function() {
+    try {
+      const response = await fetch(letterBatchStatusUrl);
+      const data = await response.json();
+
+      if (!data.success) {
+        clearInterval(pollInterval);
+        return;
+      }
+
+      document.getElementById('progress-percent').textContent = `${data.progress_percent}%`;
+      document.getElementById('progress-bar').style.width = `${data.progress_percent}%`;
+      document.getElementById('generated-count').textContent = data.generated_count;
+      document.getElementById('failed-count').textContent = data.failed_count;
+      document.getElementById('file-count').textContent = data.file_count;
+
+      if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+        clearInterval(pollInterval);
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error polling batch status:', error);
+    }
+  }, 3000);
+})();
+</script>
+{% endif %}
+{% endblock %}

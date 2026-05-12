@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paying-In Slip - {{ slip.slip_number }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #333;
+      padding: 20px;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 20px;
+    }
+    
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    
+    .header .slip-number {
+      font-size: 18px;
+      font-weight: bold;
+      color: #0066cc;
+    }
+    
+    .meta-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 4px;
+    }
+    
+    .meta-info div {
+      text-align: center;
+    }
+    
+    .meta-info .label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+    }
+    
+    .meta-info .value {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    .summary-box {
+      border: 2px solid #333;
+      padding: 15px;
+      margin-bottom: 20px;
+      background: #fff;
+    }
+    
+    .summary-box h2 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 5px;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+    }
+    
+    .summary-row.total {
+      border-top: 2px solid #333;
+      margin-top: 10px;
+      padding-top: 10px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    
+    td.amount {
+      text-align: right;
+      font-family: monospace;
+    }
+    
+    .payment-type-section {
+      margin-bottom: 20px;
+    }
+    
+    .payment-type-section h3 {
+      font-size: 12px;
+      background: #e0e0e0;
+      padding: 8px;
+      margin-bottom: 0;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .signature-box {
+      width: 45%;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+      text-align: center;
+    }
+    
+    .signature-box .label {
+      font-size: 10px;
+      color: #666;
+    }
+    
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom: 20px; text-align: center;">
+    <button onclick="window.print()" style="padding: 10px 30px; font-size: 14px; cursor: pointer;">
+      Print Slip
+    </button>
+    <a href="{% url 'custom_admin:slip_detail' slip.id %}" style="margin-left: 20px;">Back to Slip</a>
+  </div>
+
+  <div class="header">
+    <h1>PAYING-IN SLIP</h1>
+    <div class="slip-number">{{ slip.slip_number }}</div>
+  </div>
+
+  <div class="meta-info">
+    <div>
+      <div class="label">Client</div>
+      <div class="value">{{ slip.client.name }}</div>
+    </div>
+    <div>
+      <div class="label">Banking Date</div>
+      <div class="value">{{ slip.banking_date|date:"d/m/Y" }}</div>
+    </div>
+    <div>
+      <div class="label">Payment Type</div>
+      <div class="value">{{ slip.get_payment_type_display }}</div>
+    </div>
+    <div>
+      <div class="label">Status</div>
+      <div class="value">{{ slip.get_status_display }}</div>
+    </div>
+  </div>
+
+  <div class="summary-box">
+    <h2>Summary</h2>
+    {% for ptype, pdonations in grouped_donations.items %}
+    <div class="summary-row">
+      <span>{{ payment_type_labels|default_if_none:ptype }}</span>
+      <span>{{ pdonations|length }} item(s)</span>
+    </div>
+    {% endfor %}
+    <div class="summary-row total">
+      <span>TOTAL</span>
+      <span>{{ slip.total_items }} items = £{{ slip.total_amount|floatformat:2 }}</span>
+    </div>
+  </div>
+
+  {% for ptype, pdonations in grouped_donations.items %}
+  <div class="payment-type-section">
+    <h3>{{ payment_type_labels|default_if_none:ptype }} ({{ pdonations|length }} items)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 10%;">Date</th>
+          <th style="width: 25%;">Supporter Name</th>
+          <th style="width: 15%;">URN</th>
+          <th style="width: 20%;">Campaign</th>
+          <th style="width: 15%;">Reference</th>
+          <th style="width: 15%;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for donation in pdonations %}
+        <tr>
+          <td>{{ donation.donation_date|date:"d/m/Y"|default:donation.created_at|date:"d/m/Y" }}</td>
+          <td>
+            {% if donation.donor %}
+              {{ donation.donor.first_name }} {{ donation.donor.last_name }}
+            {% elif donation.data_file_donor %}
+              {{ donation.data_file_donor.first_name }} {{ donation.data_file_donor.last_name }}
+            {% else %}
+              {{ donation.donor_name|default:"Unknown" }}
+            {% endif %}
+          </td>
+          <td>
+            {% if donation.donor %}{{ donation.donor.urn }}{% elif donation.data_file_donor %}{{ donation.data_file_donor.urn }}{% endif %}
+          </td>
+          <td>{{ donation.campaign.name }}</td>
+          <td>
+            {% if donation.payment_method == 'cheque' %}{{ donation.cheque_number }}
+            {% elif donation.payment_method == 'postal_order' %}{{ donation.postal_order_number }}
+            {% elif donation.payment_method == 'caf' %}{{ donation.caf_voucher_number }}
+            {% endif %}
+          </td>
+          <td class="amount">£{{ donation.amount|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <div class="footer">
+    <div class="signature-box">
+      <div class="label">Prepared By</div>
+      <p style="margin-top: 30px;">{{ slip.created_by.get_full_name|default:slip.created_by.username|default:"_________________" }}</p>
+      <p>Date: {{ slip.created_at|date:"d/m/Y" }}</p>
+    </div>
+    <div class="signature-box">
+      <div class="label">Verified By</div>
+      <p style="margin-top: 30px;">_________________</p>
+      <p>Date: _________________</p>
+    </div>
+  </div>
+
+  {% if slip.notes %}
+  <div style="margin-top: 30px; padding: 10px; background: #fff9e6; border: 1px solid #e6d090;">
+    <strong>Notes:</strong> {{ slip.notes }}
+  </div>
+  {% endif %}
+</body>
+</html>

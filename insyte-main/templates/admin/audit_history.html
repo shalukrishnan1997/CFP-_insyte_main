@@ -1,0 +1,377 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block title %}Audit History{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="page-header-section flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex items-center gap-4 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-900">Audit History</h1>
+            <!-- Metric Tags -->
+            <div class="flex items-center gap-2 flex-wrap text-sm">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200" title="Total Logs">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    {{ logs.paginator.count }} Total Entries
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div x-data="{ 
+        showFilters: {% if user_filter or action_filter or model_filter or date_from or date_to or search_query %}true{% else %}false{% endif %},
+        userDropOpen: false,
+        selectedUserVal: '{{ user_filter|default:'' }}',
+        selectedUserName: '{% if user_filter %}{% for u in all_users %}{% if u.id|stringformat:"s" == user_filter|stringformat:"s" %}{{ u.username|escapejs }}{% endif %}{% endfor %}{% else %}All Users{% endif %}',
+        actionDropOpen: false,
+        selectedActionVal: '{{ action_filter|default:'' }}',
+        selectedActionName: '{% if action_filter %}{% for a in all_actions %}{% if a.action == action_filter %}{{ a.action|escapejs }}{% endif %}{% endfor %}{% else %}All Actions{% endif %}',
+        modelDropOpen: false,
+        selectedModelVal: '{{ model_filter|default:'' }}',
+        selectedModelName: '{% if model_filter %}{% for m in all_models %}{% if m.model_name == model_filter %}{{ m.model_name|escapejs }}{% endif %}{% endfor %}{% else %}All Models{% endif %}'
+    }">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            {% if user_filter or action_filter or model_filter or date_from or date_to or search_query %}
+            {% include "components/admin/filter_toggle_button.html" with active_badge=True %}
+            {% else %}
+            {% include "components/admin/filter_toggle_button.html" with active_badge=False %}
+            {% endif %}
+
+            <div x-show="showFilters" x-collapse class="border-t border-gray-200 p-6" style="overflow: visible;">
+                <form method="get" class="space-y-6" style="overflow: visible;">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <!-- User Filter - Elite Dropdown -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">User</label>
+                            <button @click="userDropOpen = !userDropOpen" @click.away="userDropOpen = false" type="button"
+                                class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style="height: 38px;">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="truncate" x-text="selectedUserName || 'All Users'">All Users</span>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': userDropOpen }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div x-show="userDropOpen" x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+                                x-cloak>
+                                <button type="button"
+                                    @click="selectedUserVal = ''; selectedUserName = 'All Users'; userDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="!selectedUserVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    All Users
+                                </button>
+                                {% for user_item in all_users %}
+                                <button type="button"
+                                    @click="selectedUserVal = '{{ user_item.id }}'; selectedUserName = '{{ user_item.username|escapejs }}'; userDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedUserVal === '{{ user_item.id|stringformat:'s' }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    {{ user_item.username }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="user" x-model="selectedUserVal">
+                        </div>
+
+                        <!-- Action Filter - Elite Dropdown -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Action</label>
+                            <button @click="actionDropOpen = !actionDropOpen" @click.away="actionDropOpen = false" type="button"
+                                class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style="height: 38px;">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="truncate" x-text="selectedActionName || 'All Actions'">All Actions</span>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': actionDropOpen }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div x-show="actionDropOpen" x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+                                x-cloak>
+                                <button type="button"
+                                    @click="selectedActionVal = ''; selectedActionName = 'All Actions'; actionDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="!selectedActionVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    All Actions
+                                </button>
+                                {% for action_item in all_actions %}
+                                <button type="button"
+                                    @click="selectedActionVal = '{{ action_item.action }}'; selectedActionName = '{{ action_item.action|escapejs }}'; actionDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedActionVal === '{{ action_item.action }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    {{ action_item.action }} ({{ action_item.count }})
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="action" x-model="selectedActionVal">
+                        </div>
+
+                        <!-- Model Filter - Elite Dropdown -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+                            <button @click="modelDropOpen = !modelDropOpen" @click.away="modelDropOpen = false" type="button"
+                                class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                                style="height: 38px;">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="truncate" x-text="selectedModelName || 'All Models'">All Models</span>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 shrink-0 transition-transform" :class="{ 'rotate-180': modelDropOpen }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div x-show="modelDropOpen" x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+                                x-cloak>
+                                <button type="button"
+                                    @click="selectedModelVal = ''; selectedModelName = 'All Models'; modelDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="!selectedModelVal ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    All Models
+                                </button>
+                                {% for model_item in all_models %}
+                                <button type="button"
+                                    @click="selectedModelVal = '{{ model_item.model_name }}'; selectedModelName = '{{ model_item.model_name|escapejs }}'; modelDropOpen = false"
+                                    class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                                    :class="selectedModelVal === '{{ model_item.model_name }}' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                                    {{ model_item.model_name }} ({{ model_item.count }})
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="model" x-model="selectedModelVal">
+                        </div>
+
+                        <!-- Date From -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Date From</label>
+                            <input type="date" name="date_from" id="date_from" value="{{ date_from }}" 
+                                class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                        </div>
+
+                        <!-- Date To -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1.5">Date To</label>
+                            <input type="date" name="date_to" id="date_to" value="{{ date_to }}" 
+                                class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1 relative">
+                            <input type="text" name="search" value="{{ search_query }}" placeholder="Search in summary, object, or batch ID..." 
+                                class="block w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm text-sm">
+                            Apply Filters
+                        </button>
+                        <a href="{% url 'custom_admin:audit_log_history' %}" class="px-6 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors shadow-sm text-sm">
+                            Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50/50">
+            <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider">Activity Log</h2>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">When</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Who</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">What</th>
+                        <th class="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white">
+                    {% for log in logs %}
+                    <tr class="hover:bg-gray-50/80 transition-colors group">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-bold text-gray-900 leading-tight">{{ log.created_at|date:"d M Y" }}</div>
+                            <div class="text-[11px] text-gray-400 font-medium">{{ log.created_at|date:"g:i A" }}</div>
+                        </td>
+                        
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-sm">
+                                    <span class="text-xs font-bold">
+                                        {% if log.user %}{{ log.user.get_full_name|default:log.user.username|slice:":1"|upper }}{% else %}S{% endif %}
+                                    </span>
+                                </div>
+                                <span class="text-sm font-semibold text-gray-700">{% if log.user %}{{ log.user.get_full_name|default:log.user.username }}{% else %}System{% endif %}</span>
+                            </div>
+                        </td>
+                        
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if log.action == 'CREATE' or log.action == 'BULK_CREATE' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-50 text-green-700 border border-green-100 uppercase tracking-wider">
+                                Created
+                            </span>
+                            {% elif log.action == 'UPDATE' or log.action == 'BULK_UPDATE' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wider">
+                                Updated
+                            </span>
+                            {% elif log.action == 'DELETE' or log.action == 'BULK_DELETE' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-100 uppercase tracking-wider">
+                                Deleted
+                            </span>
+                            {% elif log.action == 'LOGIN' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100 uppercase tracking-wider">
+                                Logged In
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-50 text-gray-700 border border-gray-100 uppercase tracking-wider">
+                                {{ log.action }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900 font-medium">
+                                {% if log.batch_size %}
+                                    <span class="text-blue-600">{{ log.batch_size }}</span> {{ log.model_name|lower }}s
+                                {% else %}
+                                    <span class="text-gray-900">{{ log.model_name }}</span>{% if log.object_repr %}: <span class="text-gray-500 font-normal italic">{{ log.object_repr|truncatechars:30 }}</span>{% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        
+                        <td class="px-6 py-4 text-right">
+                            <div x-data="{ showDetails: false }" class="relative flex justify-end">
+                                {% if log.summary %}
+                                <button @click="showDetails = !showDetails" 
+                                        class="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
+                                    <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': showDetails }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div x-show="showDetails" 
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="transform opacity-0 scale-95"
+                                     x-transition:enter-end="transform opacity-100 scale-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="transform opacity-100 scale-100"
+                                     x-transition:leave-end="transform opacity-0 scale-95"
+                                     @click.away="showDetails = false"
+                                     class="absolute right-0 mt-8 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-4 text-left"
+                                     x-cloak>
+                                    <div class="flex items-center gap-2 mb-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Log Details
+                                    </div>
+                                    <p class="text-sm text-gray-700 leading-relaxed">{{ log.summary }}</p>
+                                    {% if log.ip_address %}
+                                    <div class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400">
+                                        <span>IP Address:</span>
+                                        <span class="font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{{ log.ip_address }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="text-gray-300 text-xs">—</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-20 text-center">
+                            <div class="flex flex-col items-center gap-3">
+                                <div class="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                <p class="text-sm font-semibold text-gray-500 tracking-tight">No activity logs found matching your criteria</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if logs.has_other_pages %}
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50/30 flex items-center justify-between">
+            <div class="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Page <span class="text-gray-900">{{ logs.number }}</span> of {{ logs.paginator.num_pages }}
+            </div>
+            <div class="flex gap-2">
+                {% if logs.has_previous %}
+                <a href="?page={{ logs.previous_page_number }}{% if user_filter %}&user={{ user_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if model_filter %}&model={{ model_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}&per_page={{ per_page }}" 
+                   class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition uppercase tracking-wider">
+                    Previous
+                </a>
+                {% endif %}
+
+                {% if logs.has_next %}
+                <a href="?page={{ logs.next_page_number }}{% if user_filter %}&user={{ user_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}{% if model_filter %}&model={{ model_filter }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}&per_page={{ per_page }}" 
+                   class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition uppercase tracking-wider">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  (function() {
+    flatpickr('#date_from', {
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      allowInput: true
+    });
+    
+    flatpickr('#date_to', {
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      allowInput: true
+    });
+  })();
+</script>
+{% endblock %}

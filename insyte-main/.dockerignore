@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+!.env.example
+
+# Static & Media (Managed by volumes)
+staticfiles/
+media/
+
+# Database
+*.sqlite3
+
+# Node/Frontend
+node_modules/
+.npm/
+
+# Logs
+*.log
+
+# Docker/Coolify
+.docker
+.gemini
+Dockerfile*
+docker-compose*.yml
+gcp-service-account.json
+gcp-service-account.json.b64

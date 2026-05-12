@@ -1,0 +1,298 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Fill Donation - {{ campaign.name }} - DMS{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <!-- Page Header -->
+  <div>
+    <a href="{% url 'custom_admin:donation_batch_detail' batch.campaign.client.id batch.campaign.id batch.id %}" class="text-blue-600 hover:text-blue-700 text-sm mb-2 inline-flex items-center" aria-label="Back to batch">
+      <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+      </svg>
+      Back to Batch
+    </a>
+    <h1 id="page-title" class="text-2xl font-bold text-gray-900 mt-2">{{ campaign.name }}</h1>
+    <p class="mt-1 text-sm text-gray-500" id="page-desc">{{ campaign.description }}</p>
+  </div>
+
+  <!-- Donation Form -->
+  <form method="post" class="bg-white rounded-lg shadow p-6 space-y-6" id="donation-form">
+    {% csrf_token %}
+
+    <!-- Payment / Donation metadata (new) -->
+    <div class="bg-gray-50 p-4 rounded">
+      <h3 class="text-sm font-medium text-gray-800 mb-3">Payment & Donation Details</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- Payment method -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Payment method</label>
+          <select name="payment_method" id="payment_method" class="mt-1 block w-full px-3 py-2 border rounded" aria-describedby="help_payment_method">
+            <option value="">Select method</option>
+            <option value="card">Card</option>
+            <option value="direct_debit">Direct Debit</option>
+            <option value="cash">Cash</option>
+            <option value="caf">CAF Voucher</option>
+            <option value="postal_order">Postal Order</option>
+            <option value="cheque">Cheque</option>
+            <option value="non_financial">Non Financial/No Payment</option>
+          </select>
+          <p id="help_payment_method" class="text-xs text-gray-500 mt-1">Choose how the donor paid.</p>
+        </div>
+
+        <!-- Donation date -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Donation date</label>
+          <input type="date" name="donation_date" id="donation_date" value="{% now 'Y-m-d' %}" class="mt-1 block w-full px-3 py-2 border rounded" />
+        </div>
+
+        <!-- Donation frequency - only for Direct Debit and repeat card payments -->
+        <div id="frequency-field" style="display: none;">
+          <label class="block text-sm font-medium text-gray-700">Frequency (optional)</label>
+          <select name="donation_frequency" id="donation_frequency" class="mt-1 block w-full px-3 py-2 border rounded">
+            <option value="">One-off</option>
+            <option value="Monthly">Monthly</option>
+            <option value="Quarterly">Quarterly</option>
+            <option value="Annually">Annually</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">For recurring Direct Debit payments</p>
+        </div>
+
+        <!-- Gift Aid -->
+        <div class="md:col-span-3">
+          <label class="inline-flex items-center">
+            <input type="checkbox" name="gift_aid" id="gift_aid" class="h-4 w-4 text-blue-600">
+            <span class="ml-2 text-sm text-gray-700">Gift Aid declaration (I confirm this donation is eligible for Gift Aid)</span>
+          </label>
+        </div>
+
+        <!-- Cheque details (shown when Cheque/Postal Cheque selected) -->
+        <div id="cheque-fields" class="hidden md:col-span-3 grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Cheque number</label>
+            <input type="text" name="cheque_no" id="cheque_no" class="mt-1 block w-full px-3 py-2 border rounded" placeholder="Cheque number">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Cheque date</label>
+            <input type="date" name="cheque_date" id="cheque_date" class="mt-1 block w-full px-3 py-2 border rounded">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Existing dynamic fields (campaign fields) -->
+    {% for field in fields %}
+    <div>
+      {% if field.field_type == 'radio' or field.field_type == 'checkbox' %}
+      <fieldset aria-labelledby="label_{{ field.id }}">
+        <legend id="label_{{ field.id }}" class="block text-sm font-medium text-gray-700 mb-1">
+          {{ field.label }}{% if field.required %}<span class="text-red-500"> *</span>{% endif %}
+        </legend>
+      {% else %}
+      <label for="field_{{ field.id }}" id="label_{{ field.id }}" class="block text-sm font-medium text-gray-700 mb-1">
+        {{ field.label }}{% if field.required %}<span class="text-red-500"> *</span>{% endif %}
+      </label>
+      {% endif %}
+
+      {% if field.help_text %}
+      <p id="help_field_{{ field.id }}" class="text-xs text-gray-500 mb-2">{{ field.help_text }}</p>
+      {% endif %}
+      
+      {% if field.field_type == 'text' or field.field_type == 'email' or field.field_type == 'phone' %}
+      <input type="{{ field.field_type }}" 
+             name="field_{{ field.id }}" 
+             id="field_{{ field.id }}"
+             value="{{ field.initial|default:'' }}"
+             {% if field.required %}required aria-required="true"{% endif %}
+             placeholder="{{ field.placeholder }}"
+             {% if field.help_text %}aria-describedby="help_field_{{ field.id }}"{% endif %}
+             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      
+      {% elif field.field_type == 'number' %}
+      <input type="number" 
+             name="field_{{ field.id }}" 
+             id="field_{{ field.id }}"
+             step="0.01"
+             value="{{ field.initial|default:'' }}"
+             {% if field.required %}required aria-required="true"{% endif %}
+             placeholder="{{ field.placeholder }}"
+             {% if field.help_text %}aria-describedby="help_field_{{ field.id }}"{% endif %}
+             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      
+      {% elif field.field_type == 'date' %}
+      <input type="date" 
+             name="field_{{ field.id }}" 
+             id="field_{{ field.id }}"
+             value="{{ field.initial|default:'' }}"
+             {% if field.required %}required aria-required="true"{% endif %}
+             {% if field.help_text %}aria-describedby="help_field_{{ field.id }}"{% endif %}
+             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+      
+      {% elif field.field_type == 'dropdown' %}
+      <select name="field_{{ field.id }}" 
+              id="field_{{ field.id }}"
+              {% if field.required %}required aria-required="true"{% endif %}
+              aria-describedby="{% if field.help_text %}help_field_{{ field.id }}{% endif %}"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        <option value="">-- Select --</option>
+        {% for option in field.options %}
+        <option value="{{ option }}" {% if option == field.initial %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      
+      {% elif field.field_type == 'textarea' %}
+      <textarea name="field_{{ field.id }}" 
+                id="field_{{ field.id }}"
+                rows="4"
+                {% if field.required %}required aria-required="true"{% endif %}
+                aria-describedby="{% if field.help_text %}help_field_{{ field.id }}{% endif %}"
+                placeholder="{{ field.placeholder }}"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">{{ field.initial|default:'' }}</textarea>
+      
+      {% elif field.field_type == 'radio' %}
+      <div class="space-y-2" role="radiogroup" aria-labelledby="label_{{ field.id }}">
+        {% for option in field.options %}
+        <label class="flex items-center">
+          <input type="radio" 
+                 name="field_{{ field.id }}" 
+                 value="{{ option }}"
+                 {% if option == field.initial %}checked{% endif %}
+                 {% if field.required %}required aria-required="true"{% endif %}
+                 class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+          <span class="ml-2 text-sm text-gray-700">{{ option }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      
+      {% elif field.field_type == 'checkbox' %}
+      <div class="space-y-2" role="group" aria-labelledby="label_{{ field.id }}">
+        {% for option in field.options %}
+        <label class="flex items-center">
+          <input type="checkbox"
+                 name="field_{{ field.id }}"
+                 value="{{ option }}"
+                 {% if field.initial and option in field.initial %}checked{% endif %}
+                 class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                 aria-checked="{% if field.initial and option in field.initial %}true{% else %}false{% endif %}">
+          <span class="ml-2 text-sm text-gray-700">{{ option }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if field.field_type == 'radio' or field.field_type == 'checkbox' %}
+      </fieldset>
+      {% endif %}
+    </div>
+    {% endfor %}
+    
+    <!-- Submit Buttons -->
+    <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+      <a href="{% url 'custom_admin:donation_batch_detail' batch.campaign.client.id batch.campaign.id batch.id %}" 
+         class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+         aria-label="Cancel and return to campaign">
+        Cancel
+      </a>
+      <button type="submit" 
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg"
+              aria-label="Submit donation">
+        {% if editing %}Update Donation{% else %}Submit Donation{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  (() => {
+    function initializeDonationEditPage(root = document) {
+      const donationDateInput = root.querySelector('#donation_date');
+      if (
+        donationDateInput
+        && typeof flatpickr !== 'undefined'
+        && donationDateInput.dataset.flatpickrInitialized !== 'true'
+      ) {
+        flatpickr(donationDateInput, {
+          dateFormat: "d/m/Y",
+          altInput: true,
+          altFormat: "d/m/Y",
+          allowInput: true
+        });
+        donationDateInput.dataset.flatpickrInitialized = 'true';
+      }
+
+      const chequeDateInput = root.querySelector('#cheque_date');
+      if (
+        chequeDateInput
+        && typeof flatpickr !== 'undefined'
+        && chequeDateInput.dataset.flatpickrInitialized !== 'true'
+      ) {
+        flatpickr(chequeDateInput, {
+          dateFormat: "d/m/Y",
+          altInput: true,
+          altFormat: "d/m/Y",
+          allowInput: true
+        });
+        chequeDateInput.dataset.flatpickrInitialized = 'true';
+      }
+
+      const pm = root.querySelector('#payment_method');
+      const chequeFields = root.querySelector('#cheque-fields');
+      const frequencyField = root.querySelector('#frequency-field');
+      const freqSelect = root.querySelector('#donation_frequency');
+
+      if (!pm || !chequeFields || !frequencyField) {
+        return;
+      }
+
+      function toggleFields() {
+        const v = pm.value ? pm.value.toLowerCase() : '';
+        if (v.includes('cheque')) {
+          chequeFields.classList.remove('hidden');
+          chequeFields.classList.add('grid');
+        } else {
+          chequeFields.classList.remove('grid');
+          chequeFields.classList.add('hidden');
+        }
+
+        if (v === 'direct_debit') {
+          frequencyField.style.display = 'block';
+        } else {
+          frequencyField.style.display = 'none';
+          if (freqSelect) {
+            freqSelect.value = '';
+          }
+        }
+      }
+
+      if (pm.dataset.toggleFieldsBound !== 'true') {
+        pm.addEventListener('change', toggleFields);
+        pm.dataset.toggleFieldsBound = 'true';
+      }
+
+      toggleFields();
+    }
+
+    if (!window.__donationEditInitBound) {
+      document.body.addEventListener('htmx:load', function (event) {
+        initializeDonationEditPage(event.target);
+      });
+      window.__donationEditInitBound = true;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function handleDonationEditReady() {
+        initializeDonationEditPage(document);
+      }, { once: true });
+    } else {
+      initializeDonationEditPage(document);
+    }
+  })();
+</script>
+{% endblock %}

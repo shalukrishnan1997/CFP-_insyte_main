@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Failed</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px 0;
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #b91c1c, #ef4444);
+            color: #ffffff;
+            padding: 28px 24px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .header p {
+            margin: 8px 0 0;
+            font-size: 14px;
+            opacity: 0.92;
+        }
+        .content {
+            padding: 28px 24px;
+        }
+        .alert {
+            margin: 24px 0;
+            padding: 18px 20px;
+            border-radius: 10px;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+        .alert strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #991b1b;
+        }
+        .details {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        .details td {
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+        .details td:first-child {
+            color: #64748b;
+            width: 42%;
+        }
+        .details td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .note {
+            margin-top: 24px;
+            font-size: 14px;
+            color: #475569;
+        }
+        .footer {
+            padding: 20px 24px;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            font-size: 12px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Payment Failed</h1>
+            <p>Unable to process payment for invoice {{ invoice.invoice_number }}</p>
+        </div>
+        <div class="content">
+            <p>Hello {{ client.name }},</p>
+            <p>We could not complete the payment attempt for the invoice below.</p>
+
+            <div class="alert">
+                <strong>Failure details</strong>
+                <div>{{ error_message|default:"The payment processor did not return a detailed error message." }}</div>
+            </div>
+
+            <table class="details">
+                <tr>
+                    <td>Invoice number</td>
+                    <td>{{ invoice.invoice_number }}</td>
+                </tr>
+                <tr>
+                    <td>Amount due</td>
+                    <td>GBP {{ invoice.balance_due|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Due date</td>
+                    <td>{{ invoice.due_date|date:"j F Y" }}</td>
+                </tr>
+                <tr>
+                    <td>Billing period</td>
+                    <td>{{ invoice.billing_period_start|date:"j M Y" }} to {{ invoice.billing_period_end|date:"j M Y" }}</td>
+                </tr>
+                <tr>
+                    <td>Client</td>
+                    <td>{{ client.name }}</td>
+                </tr>
+            </table>
+
+            <p class="note">Please review the payment details and try again. If the problem continues, contact the INSYTE support team.</p>
+        </div>
+        <div class="footer">
+            This is an automated notification from INSYTE Donation Management System.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,76 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- /tmp/insyte-venv/bin/python
+cachedir: .pytest_cache
+django: version: 5.2.11, settings: responsehandling.settings.test (from ini)
+rootdir: /mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte
+configfile: pyproject.toml
+plugins: Faker-40.5.1, django-4.12.0
+collecting ... collected 59 items
+
+tests/unit/test_models.py::TestUserModel::test_create_user PASSED        [  1%]
+tests/unit/test_models.py::TestUserModel::test_user_uuid_pk PASSED       [  3%]
+tests/unit/test_models.py::TestUserModel::test_user_unique_email PASSED  [  5%]
+tests/unit/test_models.py::TestClientModel::test_create_client PASSED    [  6%]
+tests/unit/test_models.py::TestClientModel::test_client_str PASSED       [  8%]
+tests/unit/test_models.py::TestClientModel::test_client_unique_name PASSED [ 10%]
+tests/unit/test_models.py::TestCampaignModel::test_create_campaign PASSED [ 11%]
+tests/unit/test_models.py::TestCampaignModel::test_campaign_status_constants PASSED [ 13%]
+tests/unit/test_models.py::TestCampaignModel::test_campaign_is_active_property PASSED [ 15%]
+tests/unit/test_models.py::TestCampaignModel::test_campaign_linked_to_client PASSED [ 16%]
+tests/unit/test_models.py::TestCampaignModel::test_campaign_hgv_lgv_defaults PASSED [ 18%]
+tests/unit/test_models.py::TestCampaignModel::test_campaign_uuid_pk PASSED [ 20%]
+tests/unit/test_models.py::TestDonorModel::test_create_donor PASSED      [ 22%]
+tests/unit/test_models.py::TestDonorModel::test_donor_full_name PASSED   [ 23%]
+tests/unit/test_models.py::TestDonorModel::test_donor_full_name_no_title PASSED [ 25%]
+tests/unit/test_models.py::TestDonorModel::test_donor_str PASSED         [ 27%]
+tests/unit/test_models.py::TestDonorModel::test_donor_gdpr_defaults PASSED [ 28%]
+tests/unit/test_models.py::TestDonationBatchModel::test_create_batch PASSED [ 30%]
+tests/unit/test_models.py::TestDonationBatchModel::test_batch_status_constants PASSED [ 32%]
+tests/unit/test_models.py::TestDonationBatchModel::test_batch_default_currency PASSED [ 33%]
+tests/unit/test_models.py::TestDonationBatchModel::test_batch_str PASSED [ 35%]
+tests/unit/test_models.py::TestDonationModel::test_create_donation PASSED [ 37%]
+tests/unit/test_models.py::TestDonationModel::test_donation_uuid_pk PASSED [ 38%]
+tests/unit/test_models.py::TestDonationModel::test_donation_linked_to_batch PASSED [ 40%]
+tests/unit/test_models.py::TestDonationModel::test_donation_payment_methods PASSED [ 42%]
+tests/unit/test_models.py::TestDonationModel::test_donation_qa_status_default PASSED [ 44%]
+tests/unit/test_models.py::TestDonationModel::test_donation_currency_default PASSED [ 45%]
+tests/unit/test_models.py::TestDonationModel::test_donation_house_file_donor PASSED [ 47%]
+tests/unit/test_models.py::TestDonationModel::test_donation_gift_aid PASSED [ 49%]
+tests/unit/test_models.py::TestDonationModel::test_donation_amount_precision PASSED [ 50%]
+tests/unit/test_smoke.py::TestModelImports::test_core_models_importable PASSED [ 52%]
+tests/unit/test_webhooks.py::TestStripeWebhookIdempotency::test_duplicate_event_id_rejected PASSED [ 54%]
+tests/unit/test_webhooks.py::TestStripeWebhookIdempotency::test_unique_event_id_accepted PASSED [ 55%]
+tests/unit/test_webhooks.py::TestStripeWebhookIdempotency::test_duplicate_event_raises_integrity_error PASSED [ 57%]
+tests/unit/test_webhooks.py::TestStripeWebhookIdempotency::test_event_processing_marks_complete PASSED [ 59%]
+tests/unit/test_security.py::TestHealthCheck::test_health_check_returns_response PASSED [ 61%]
+tests/unit/test_security.py::TestHealthCheck::test_health_check_includes_cache PASSED [ 62%]
+tests/unit/test_security.py::TestHealthCheck::test_health_check_no_auth_required PASSED [ 64%]
+tests/unit/test_security.py::TestOTPSecurity::test_otp_uses_secrets_module PASSED [ 66%]
+tests/unit/test_security.py::TestOTPSecurity::test_otp_generates_six_digit_code PASSED [ 67%]
+tests/unit/test_security.py::TestOTPSecurity::test_otp_verification_success PASSED [ 69%]
+tests/unit/test_security.py::TestOTPSecurity::test_otp_verification_failure PASSED [ 71%]
+tests/unit/test_security.py::TestOTPSecurity::test_otp_max_attempts PASSED [ 72%]
+tests/unit/test_security.py::TestLoginView::test_login_page_loads PASSED [ 74%]
+tests/unit/test_security.py::TestLoginView::test_login_invalid_credentials PASSED [ 76%]
+tests/unit/test_security.py::TestLoginView::test_login_empty_fields PASSED [ 77%]
+tests/unit/test_security.py::TestLoginView::test_login_without_2fa_device_redirects_to_setup PASSED [ 79%]
+tests/unit/test_security.py::TestLoginView::test_middleware_blocks_user_without_2fa PASSED [ 81%]
+tests/unit/test_security.py::TestAdminApiPermissions::test_admin_api_denies_non_staff PASSED [ 83%]
+tests/unit/test_security.py::TestAdminApiPermissions::test_admin_api_allows_staff PASSED [ 84%]
+tests/unit/test_security.py::TestCampaignStatusFix::test_active_campaigns_filter PASSED [ 86%]
+tests/unit/test_security.py::TestCampaignStatusFix::test_status_live_alias PASSED [ 88%]
+tests/unit/test_security.py::TestDonationCreateValidation::test_missing_campaign_redirects PASSED [ 89%]
+tests/unit/test_security.py::TestDonationCreateValidation::test_missing_batch_redirects PASSED [ 91%]
+tests/unit/test_security.py::TestDonationCreateValidation::test_negative_amount_redirects PASSED [ 93%]
+tests/unit/test_security.py::TestDonationCreateValidation::test_invalid_amount_redirects PASSED [ 94%]
+tests/unit/test_security.py::TestDonationCreateValidation::test_valid_donation_creates_record PASSED [ 96%]
+tests/unit/test_smoke.py::TestDjangoSetup::test_root_urlconf_resolves PASSED [ 98%]
+tests/unit/test_smoke.py::TestDjangoSetup::test_settings_module_loads PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/unit/test_security.py: 13 warnings
+  /tmp/insyte-venv/lib/python3.14/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 59 passed, 13 warnings in 36.37s =======================

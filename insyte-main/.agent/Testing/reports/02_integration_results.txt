@@ -1,0 +1,198 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- /tmp/insyte-venv/bin/python
+cachedir: .pytest_cache
+django: version: 5.2.11, settings: responsehandling.settings.test (from ini)
+rootdir: /mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte
+configfile: pyproject.toml
+plugins: Faker-40.5.1, django-4.12.0
+collecting ... collected 38 items
+
+tests/integration/test_banking_views.py::TestBankingViewsLoad::test_banking_dashboard_loads FAILED [  2%]
+tests/integration/test_banking_views.py::TestBankingViewsLoad::test_slip_detail_loads FAILED [  5%]
+tests/integration/test_banking_views.py::TestBankingViewsLoad::test_slip_detail_shows_donations FAILED [  7%]
+tests/integration/test_banking_views.py::TestBankingAuth::test_unauthenticated_redirect PASSED [ 10%]
+tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_list_page_loads FAILED [ 13%]
+tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_create_page_loads FAILED [ 15%]
+tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_detail_page_loads FAILED [ 18%]
+tests/integration/test_campaign_views.py::TestCampaignViewsAuth::test_unauthenticated_user_redirected PASSED [ 21%]
+tests/integration/test_campaign_views.py::TestCampaignViewsAuth::test_non_staff_user_denied PASSED [ 23%]
+tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_edit_loads FAILED [ 26%]
+tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_list_shows_campaigns FAILED [ 28%]
+tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_detail_shows_correct_data FAILED [ 31%]
+tests/integration/test_data_integrity.py::TestAmountPrecision::test_decimal_precision_preserved PASSED [ 34%]
+tests/integration/test_data_integrity.py::TestAmountPrecision::test_large_amount_precision PASSED [ 36%]
+tests/integration/test_data_integrity.py::TestAmountPrecision::test_sum_precision PASSED [ 39%]
+tests/integration/test_data_integrity.py::TestBatchTotalsReconciliation::test_batch_total_equals_donation_sum PASSED [ 42%]
+tests/integration/test_data_integrity.py::TestBatchTotalsReconciliation::test_batch_donation_count_accurate PASSED [ 44%]
+tests/integration/test_data_integrity.py::TestSlipTotalsReconciliation::test_slip_recalculate_matches_donations PASSED [ 47%]
+tests/integration/test_data_integrity.py::TestSlipTotalsReconciliation::test_slip_processed_vs_total_reconciliation PASSED [ 50%]
+tests/integration/test_data_integrity.py::TestOrphanRecords::test_no_donations_without_batch PASSED [ 52%]
+tests/integration/test_data_integrity.py::TestOrphanRecords::test_no_donations_without_campaign PASSED [ 55%]
+tests/integration/test_data_integrity.py::TestPaymentRecordsIntegrity::test_payment_amount_matches_donation PASSED [ 57%]
+tests/integration/test_data_integrity.py::TestPaymentRecordsIntegrity::test_succeeded_payments_total_matches PASSED [ 60%]
+tests/integration/test_data_integrity.py::TestCrossModuleReconciliation::test_campaign_donation_count_matches PASSED [ 63%]
+tests/integration/test_data_integrity.py::TestCrossModuleReconciliation::test_batch_has_correct_campaign PASSED [ 65%]
+tests/integration/test_e2e_flows.py::TestCardPaymentE2E::test_full_card_donation_lifecycle PASSED [ 68%]
+tests/integration/test_e2e_flows.py::TestNonCardPaymentE2E::test_full_cheque_banking_lifecycle PASSED [ 71%]
+tests/integration/test_e2e_flows.py::TestMixedBatchE2E::test_mixed_batch_routes_correctly PASSED [ 73%]
+tests/integration/test_e2e_flows.py::TestFailedPaymentRetryE2E::test_payment_failure_then_retry PASSED [ 76%]
+tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_payment_processing_dashboard_loads FAILED [ 78%]
+tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_batch_payment_detail_loads FAILED [ 81%]
+tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_payment_history_loads FAILED [ 84%]
+tests/integration/test_payment_views.py::TestPaymentAuth::test_unauthenticated_redirect FAILED [ 86%]
+tests/integration/test_qa_views.py::TestQAViewsLoad::test_qa_dashboard_loads FAILED [ 89%]
+tests/integration/test_qa_views.py::TestQAViewsLoad::test_qa_dashboard_shows_batches FAILED [ 92%]
+tests/integration/test_qa_views.py::TestQABatchDetail::test_qa_batch_detail_loads FAILED [ 94%]
+tests/integration/test_qa_views.py::TestQABatchDetail::test_qa_batch_detail_shows_donations FAILED [ 97%]
+tests/integration/test_qa_views.py::TestQAAuth::test_unauthenticated_redirect PASSED [100%]
+
+=================================== FAILURES ===================================
+______________ TestBankingViewsLoad.test_banking_dashboard_loads _______________
+tests/integration/test_banking_views.py:42: in test_banking_dashboard_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+---------------------------- Captured stderr setup -----------------------------
+Creating test database for alias 'default'...
+_________________ TestBankingViewsLoad.test_slip_detail_loads __________________
+tests/integration/test_banking_views.py:51: in test_slip_detail_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+____________ TestBankingViewsLoad.test_slip_detail_shows_donations _____________
+tests/integration/test_banking_views.py:61: in test_slip_detail_shows_donations
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+_____________ TestCampaignViewsLoad.test_campaign_list_page_loads ______________
+tests/integration/test_campaign_views.py:38: in test_campaign_list_page_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+____________ TestCampaignViewsLoad.test_campaign_create_page_loads _____________
+tests/integration/test_campaign_views.py:43: in test_campaign_create_page_loads
+    response = client.get(reverse("custom_admin:admin_campaign_create"))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'admin_campaign_create' not found. 'admin_campaign_create' is not a valid view function or pattern name.
+____________ TestCampaignViewsLoad.test_campaign_detail_page_loads _____________
+tests/integration/test_campaign_views.py:51: in test_campaign_detail_page_loads
+    reverse("custom_admin:admin_campaign_detail", kwargs={"pk": campaign.pk})
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'admin_campaign_detail' not found. 'admin_campaign_detail' is not a valid view function or pattern name.
+________________ TestCampaignViewsCRUD.test_campaign_edit_loads ________________
+tests/integration/test_campaign_views.py:94: in test_campaign_edit_loads
+    reverse("custom_admin:admin_campaign_edit", kwargs={"pk": campaign.pk})
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'admin_campaign_edit' not found. 'admin_campaign_edit' is not a valid view function or pattern name.
+___________ TestCampaignViewsCRUD.test_campaign_list_shows_campaigns ___________
+tests/integration/test_campaign_views.py:105: in test_campaign_list_shows_campaigns
+    assert "Winter Relief 2026" in content
+E   AssertionError: assert 'Winter Relief 2026' in ''
+________ TestCampaignViewsCRUD.test_campaign_detail_shows_correct_data _________
+tests/integration/test_campaign_views.py:117: in test_campaign_detail_shows_correct_data
+    reverse("custom_admin:admin_campaign_detail", kwargs={"pk": campaign.pk})
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'admin_campaign_detail' not found. 'admin_campaign_detail' is not a valid view function or pattern name.
+_________ TestPaymentViewsLoad.test_payment_processing_dashboard_loads _________
+tests/integration/test_payment_views.py:38: in test_payment_processing_dashboard_loads
+    response = client.get(reverse("custom_admin:payment_processing_dashboard"))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'payment_processing_dashboard' not found. 'payment_processing_dashboard' is not a valid view function or pattern name.
+_____________ TestPaymentViewsLoad.test_batch_payment_detail_loads _____________
+tests/integration/test_payment_views.py:48: in test_batch_payment_detail_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+_______________ TestPaymentViewsLoad.test_payment_history_loads ________________
+tests/integration/test_payment_views.py:54: in test_payment_history_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+________________ TestPaymentAuth.test_unauthenticated_redirect _________________
+tests/integration/test_payment_views.py:69: in test_unauthenticated_redirect
+    response = client.get(reverse("custom_admin:payment_processing_dashboard"))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'payment_processing_dashboard' not found. 'payment_processing_dashboard' is not a valid view function or pattern name.
+___________________ TestQAViewsLoad.test_qa_dashboard_loads ____________________
+tests/integration/test_qa_views.py:42: in test_qa_dashboard_loads
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+_______________ TestQAViewsLoad.test_qa_dashboard_shows_batches ________________
+tests/integration/test_qa_views.py:52: in test_qa_dashboard_shows_batches
+    assert response.status_code == 200
+E   assert 302 == 200
+E    +  where 302 = <HttpResponseRedirect status_code=302, "text/html; charset=utf-8", url="/">.status_code
+_________________ TestQABatchDetail.test_qa_batch_detail_loads _________________
+tests/integration/test_qa_views.py:70: in test_qa_batch_detail_loads
+    reverse("custom_admin:qa_batch_detail", kwargs={"batch_id": batch.pk})
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'qa_batch_detail' not found. 'qa_batch_detail' is not a valid view function or pattern name.
+____________ TestQABatchDetail.test_qa_batch_detail_shows_donations ____________
+tests/integration/test_qa_views.py:81: in test_qa_batch_detail_shows_donations
+    reverse("custom_admin:qa_batch_detail", kwargs={"batch_id": batch.pk})
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/base.py:98: in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/insyte-venv/lib/python3.14/site-packages/django/urls/resolvers.py:831: in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+E   django.urls.exceptions.NoReverseMatch: Reverse for 'qa_batch_detail' not found. 'qa_batch_detail' is not a valid view function or pattern name.
+=============================== warnings summary ===============================
+tests/integration/test_banking_views.py: 4 warnings
+tests/integration/test_campaign_views.py: 4 warnings
+tests/integration/test_payment_views.py: 2 warnings
+tests/integration/test_qa_views.py: 3 warnings
+  /tmp/insyte-venv/lib/python3.14/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/test_banking_views.py::TestBankingViewsLoad::test_banking_dashboard_loads
+FAILED tests/integration/test_banking_views.py::TestBankingViewsLoad::test_slip_detail_loads
+FAILED tests/integration/test_banking_views.py::TestBankingViewsLoad::test_slip_detail_shows_donations
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_list_page_loads
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_create_page_loads
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsLoad::test_campaign_detail_page_loads
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_edit_loads
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_list_shows_campaigns
+FAILED tests/integration/test_campaign_views.py::TestCampaignViewsCRUD::test_campaign_detail_shows_correct_data
+FAILED tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_payment_processing_dashboard_loads
+FAILED tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_batch_payment_detail_loads
+FAILED tests/integration/test_payment_views.py::TestPaymentViewsLoad::test_payment_history_loads
+FAILED tests/integration/test_payment_views.py::TestPaymentAuth::test_unauthenticated_redirect
+FAILED tests/integration/test_qa_views.py::TestQAViewsLoad::test_qa_dashboard_loads
+FAILED tests/integration/test_qa_views.py::TestQAViewsLoad::test_qa_dashboard_shows_batches
+FAILED tests/integration/test_qa_views.py::TestQABatchDetail::test_qa_batch_detail_loads
+FAILED tests/integration/test_qa_views.py::TestQABatchDetail::test_qa_batch_detail_shows_donations
+================= 17 failed, 21 passed, 13 warnings in 36.62s ==================

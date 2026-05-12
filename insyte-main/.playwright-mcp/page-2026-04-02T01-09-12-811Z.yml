@@ -1,0 +1,51 @@
+- generic [active] [ref=e1]:
+  - progressbar "Page loading"
+  - generic:
+    - generic:
+      - img
+      - generic:
+        - heading "Processing…" [level=3]
+        - paragraph: This may take a moment
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - region "Notifications":
+    - alert [ref=e3]:
+      - generic [ref=e4]:
+        - img [ref=e5]
+        - generic [ref=e7]: Info icon
+      - generic [ref=e8]: Please sign in to continue.
+      - button "Close notification" [ref=e9] [cursor=pointer]:
+        - img [ref=e10]
+  - generic [ref=e15]:
+    - img "CFP Lottery and Raffles" [ref=e17]
+    - generic [ref=e18]:
+      - alert [ref=e19]:
+        - img [ref=e21]
+        - paragraph [ref=e24]: Please sign in to continue.
+        - button "Close" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+      - generic [ref=e28]:
+        - generic [ref=e29]: Username
+        - generic [ref=e30]:
+          - generic:
+            - img
+          - textbox "Username" [ref=e31]:
+            - /placeholder: Enter your username
+      - generic [ref=e32]:
+        - generic [ref=e33]: Password
+        - generic [ref=e34]:
+          - generic:
+            - img
+          - textbox "Password" [ref=e35]:
+            - /placeholder: Enter your password
+          - button "Show password" [ref=e36] [cursor=pointer]:
+            - img [ref=e37]
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - checkbox "Remember me" [ref=e42]
+          - generic [ref=e43]: Remember me
+        - link "Forgot password?" [ref=e45] [cursor=pointer]:
+          - /url: /auth/password-reset/
+      - button "Sign In" [ref=e46] [cursor=pointer]:
+        - img [ref=e47]
+        - text: Sign In

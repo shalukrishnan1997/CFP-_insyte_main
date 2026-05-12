@@ -1,0 +1,159 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Payment Gateway Configuration - {{ client.name }} - Admin{% endblock %}
+
+{% block extra_head %}{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="page-header-section flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <a href="{% url 'custom_admin:client_setup' %}" class="hover:text-blue-600 transition-colors">Client Setup</a>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                <span>Payment Config</span>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900">Payment Gateway Configuration</h1>
+            <p class="text-sm text-gray-500 mt-1">Manage payment credentials for {{ client.name }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'custom_admin:client_edit' client.id %}" 
+               class="inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Back to Edit Client
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Sidebar: Client Summary -->
+        <div class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Client Information</h2>
+                <div class="space-y-4 text-sm">
+                    <div>
+                        <p class="text-gray-500">Name</p>
+                        <p class="font-medium text-gray-900">{{ client.name }}</p>
+                    </div>
+                    {% if client.email %}
+                    <div>
+                        <p class="text-gray-500">Email</p>
+                        <p class="font-medium text-gray-900">{{ client.email }}</p>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <p class="text-gray-500">Status</p>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold {% if client.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ client.is_active|yesno:"Active,Inactive" }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Providers Summary -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Active Gateways</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 rounded-lg border {% if stripe_gateway and stripe_gateway.is_active %}border-blue-100 bg-blue-50{% else %}border-gray-100 bg-gray-50{% endif %}">
+                        <span class="text-sm font-medium {% if stripe_gateway and stripe_gateway.is_active %}text-blue-700{% else %}text-gray-600{% endif %}">Stripe</span>
+                        {% if stripe_gateway and stripe_gateway.is_active %}
+                        <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                        {% else %}
+                        <div class="w-2 h-2 rounded-full bg-gray-300"></div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Config Forms -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Stripe Config -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" x-data="{ expanded: true }">
+                <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M13.962 8.475l-2.732 3.827 4.453 7.751c.308.53.511.53.819 0l6.172-10.729c.308-.53.102-.916-.511-.916h-8.201zm-5.747 0c-.613 0-.819.386-.511.916l6.172 10.729c.308.53.511.53.819 0l-4.453-7.751-2.027-3.894zm-1.024 0H.512c-.613 0-.819.386-.511.916l6.172 10.729c.308.53.511.53.819 0l3.827-6.172-3.827-5.473z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-900 leading-none">Stripe</h3>
+                            <p class="text-xs text-gray-500 mt-1">Direct card processing</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="expanded = !expanded" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                </div>
+                <div x-show="expanded" x-collapse>
+                    <div class="p-6">
+                        <form method="post" class="space-y-4">
+                            {% csrf_token %}
+                            <input type="hidden" name="provider" value="stripe">
+                            
+                            <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900">Enable Stripe</h4>
+                                    <p class="text-xs text-gray-500">Toggle this gateway on/off for this client</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="is_active" class="sr-only peer" {% if stripe_gateway and stripe_gateway.is_active %}checked{% endif %}>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Secret Key</label>
+                                    {% if stripe_secret_configured %}
+                                    <p class="text-xs text-gray-500 mb-1">A secret key is already stored. Leave blank to keep it; enter a new value to replace.</p>
+                                    {% endif %}
+                                    <input type="password" name="stripe_secret_key" value=""
+                                           autocomplete="new-password"
+                                           class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono text-sm"
+                                           placeholder="{% if stripe_secret_configured %}•••••••• (unchanged if empty){% else %}sk_test_...{% endif %}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Publishable Key</label>
+                                    <input type="text" name="stripe_publishable_key" value="{{ stripe_publishable_value }}"
+                                           pattern="^pk_(test|live)_.+"
+                                           title="Stripe publishable key — starts with pk_test_ or pk_live_"
+                                           class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono text-sm"
+                                           placeholder="pk_test_...">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Webhook Secret</label>
+                                    {% if stripe_webhook_configured %}
+                                    <p class="text-xs text-gray-500 mb-1">A webhook secret is already stored. Leave blank to keep it.</p>
+                                    {% endif %}
+                                    <input type="password" name="stripe_webhook_secret" value=""
+                                           autocomplete="new-password"
+                                           class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono text-sm"
+                                           placeholder="{% if stripe_webhook_configured %}•••••••• (unchanged if empty){% else %}whsec_...{% endif %}">
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end pt-4">
+                                <button type="submit" class="inline-flex items-center px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-sm">
+                                    Save Stripe Settings
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

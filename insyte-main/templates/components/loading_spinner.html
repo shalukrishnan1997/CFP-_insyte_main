@@ -1,0 +1,132 @@
+<!--
+  Dual-mode HTMX loading indicator:
+  1. Top progress bar — shown automatically for ANY boosted navigation after 150ms delay.
+     If the request finishes in <150ms, nothing is shown (feels instant).
+  2. Full-screen spinner — opt-in only via hx-indicator="#global-spinner" on slow elements
+     (report generation, batch processing, letter generation, etc.).
+-->
+<style>
+  /* ── Top progress bar ── */
+  #htmx-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 0;
+    background: linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8);
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  }
+  #htmx-progress-bar.active {
+    opacity: 1;
+    animation: htmx-progress 8s cubic-bezier(0.16, 0.9, 0.4, 1) forwards;
+  }
+  #htmx-progress-bar.done {
+    width: 100% !important;
+    opacity: 0;
+    animation: none;
+    transition: width 100ms ease, opacity 250ms ease 100ms;
+  }
+  @keyframes htmx-progress {
+    0%   { width: 0; }
+    15%  { width: 35%; }
+    50%  { width: 65%; }
+    80%  { width: 85%; }
+    100% { width: 95%; }
+  }
+
+  /* ── Full-screen spinner (opt-in via hx-indicator="#global-spinner") ── */
+  #global-spinner {
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  /* Keep pointer-events none even when visible: this node is a sibling of #page-shell on
+     <body> with z-50, while admin modals/sidebar live inside the shell — pointer-events:auto
+     would capture the whole viewport and, if htmx-request ever sticks, brick the entire UI. */
+  #global-spinner.htmx-request {
+    opacity: 1;
+    pointer-events: none;
+  }
+</style>
+
+<!-- Top progress bar (auto for all HTMX requests) -->
+<div id="htmx-progress-bar" role="progressbar" aria-label="Page loading"></div>
+
+<!-- Full-screen spinner (opt-in only — add hx-indicator="#global-spinner" to slow elements) -->
+<div
+  id="global-spinner"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50"
+>
+  <div class="bg-white rounded-lg shadow-2xl p-8 flex flex-col items-center space-y-4">
+    <svg class="animate-spin h-12 w-12 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <div class="text-center">
+      <h3 class="text-base font-semibold text-gray-900">Processing…</h3>
+      <p class="text-sm text-gray-500 mt-1">This may take a moment</p>
+    </div>
+  </div>
+</div>
+
+<!-- Progress bar controller (vanilla JS, no dependencies) -->
+<script>
+(function() {
+  var bar = document.getElementById('htmx-progress-bar');
+  var timer = null;
+  var DELAY = 150; // ms — requests faster than this show no indicator
+
+  document.addEventListener('htmx:beforeRequest', function() {
+    // Clear any previous state
+    bar.classList.remove('done', 'active');
+    bar.style.width = '0';
+    clearTimeout(timer);
+    // Only show after DELAY ms — fast requests stay invisible
+    timer = setTimeout(function() {
+      bar.classList.add('active');
+    }, DELAY);
+  });
+
+  function finish() {
+    clearTimeout(timer);
+    if (bar.classList.contains('active')) {
+      // Request was slow enough to show bar — animate to 100% then fade out
+      bar.classList.remove('active');
+      bar.classList.add('done');
+      setTimeout(function() {
+        bar.classList.remove('done');
+        bar.style.width = '0';
+      }, 400);
+    } else {
+      // Request was fast — bar never appeared, just reset
+      bar.classList.remove('active', 'done');
+      bar.style.width = '0';
+    }
+  }
+
+  document.addEventListener('htmx:afterRequest', finish);
+  document.addEventListener('htmx:responseError', finish);
+  document.addEventListener('htmx:sendError', finish);
+})();
+
+(function () {
+  var spinner = document.getElementById('global-spinner');
+  if (!spinner) return;
+  function clearSpinnerRequestClass() {
+    spinner.classList.remove('htmx-request');
+  }
+  /* Do not hook htmx:afterRequest here: overlapping boosted requests can share this indicator;
+     clearing on every completion would hide the spinner while another request is still in flight. */
+  ['htmx:responseError', 'htmx:sendError', 'htmx:abort', 'htmx:timeout', 'htmx:historyRestore'].forEach(function (evt) {
+    document.addEventListener(evt, clearSpinnerRequestClass);
+  });
+  window.addEventListener('popstate', clearSpinnerRequestClass);
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) clearSpinnerRequestClass();
+  });
+})();
+</script>

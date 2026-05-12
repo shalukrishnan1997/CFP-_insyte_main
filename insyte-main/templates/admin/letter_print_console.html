@@ -1,0 +1,193 @@
+{% extends 'layouts/admin_layout.html' %}
+{% block title %}Letters - Print Console{% endblock %}
+{% block page_content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Letters</h1>
+    <p class="mt-1 text-sm text-gray-500">
+      Pick a client and campaign, then generate the latest batch of thank-you and issue letters ready to print.
+    </p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-6">
+    <form method="get" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Client</label>
+        <select name="client" onchange="this.form.submit()"
+          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500">
+          <option value="">Choose a client…</option>
+          {% for client in clients %}
+          <option value="{{ client.id }}" {% if selected_client and selected_client.id == client.id %}selected{% endif %}>{{ client.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Campaign</label>
+        <select name="campaign" onchange="this.form.submit()" {% if not selected_client %}disabled{% endif %}
+          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500">
+          <option value="">{% if selected_client %}Choose a campaign…{% else %}Select a client first{% endif %}</option>
+          {% for campaign in campaigns %}
+          <option value="{{ campaign.id }}" {% if selected_campaign and selected_campaign.id == campaign.id %}selected{% endif %}>{{ campaign.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+
+  {% if selected_campaign %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-sm text-gray-500">Approved donations waiting for a letter</div>
+      <div class="mt-2 text-3xl font-bold text-green-600">{{ approved_pending }}</div>
+      <p class="mt-1 text-xs text-gray-500">{{ approved_total }} approved in total for this campaign.</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+      <div class="text-sm text-gray-500">Rejected donations waiting for an issue letter</div>
+      <div class="mt-2 text-3xl font-bold text-amber-600">{{ rejected_pending }}</div>
+      <p class="mt-1 text-xs text-gray-500">{{ rejected_total }} rejected in total for this campaign.</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-medium text-gray-900">Generate Letters</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          Approved donations get the thank-you template; rejected donations get the issue template.
+          Pending and flagged donations are skipped.
+        </p>
+      </div>
+      <a href="{% url 'custom_admin:letter_setup_campaign' selected_campaign.id %}"
+         class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+        Manage templates
+      </a>
+    </div>
+
+    <div class="p-6 space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="rounded-lg border border-gray-200 p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-green-700">Active Thank-You Template</div>
+          {% if active_thanks_template %}
+          <p class="mt-2 font-medium text-gray-900">{{ active_thanks_template.name }}</p>
+          <p class="mt-1 text-xs text-gray-500">Uploaded {{ active_thanks_template.created_at|date:"d M Y" }}</p>
+          {% else %}
+          <p class="mt-2 text-sm text-red-600">Not configured. Upload a thank-you template to generate letters.</p>
+          {% endif %}
+        </div>
+        <div class="rounded-lg border border-gray-200 p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-red-700">Active Issue Template</div>
+          {% if active_issue_template %}
+          <p class="mt-2 font-medium text-gray-900">{{ active_issue_template.name }}</p>
+          <p class="mt-1 text-xs text-gray-500">Uploaded {{ active_issue_template.created_at|date:"d M Y" }}</p>
+          {% else %}
+          <p class="mt-2 text-sm text-gray-600">Not configured. Rejected donations will be skipped in this batch.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if active_thanks_template %}
+      <form method="post" action="{% url 'custom_admin:generate_letter' selected_campaign.id %}" class="space-y-6">
+        {% csrf_token %}
+
+        <details class="rounded-lg border border-gray-200">
+          <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Advanced options
+          </summary>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-200">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Letters per file</label>
+              <select name="letters_per_file"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Donation filter</label>
+              <select name="donation_filter"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500">
+                <option value="all" selected>All donations</option>
+                <option value="exclude_lgv">Exclude LGV</option>
+                <option value="only_hgv">Only HGV</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">HGV = High Gift Value (£1,000+ by default); LGV = Low Gift Value (under £50). Thresholds are per-campaign.</p>
+            </div>
+            <label class="flex items-start gap-3 md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <input type="checkbox" name="regenerate_mode" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>
+                <span class="block text-sm font-medium text-gray-900">Regenerate already-issued letters</span>
+                <span class="mt-1 block text-xs text-gray-500">Leave off during normal printing runs; this bypasses the "already generated" check.</span>
+              </span>
+            </label>
+          </div>
+        </details>
+
+        {% if active_issue_template %}
+        {% with ready_count=approved_pending|add:rejected_pending %}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-blue-50 px-4 py-4 border border-blue-200">
+          <div class="text-sm text-blue-900">
+            Ready to generate <strong>{{ ready_count }}</strong> letter{{ ready_count|pluralize }} for <strong>{{ selected_campaign.name }}</strong>.
+          </div>
+          <button type="submit"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            {% if ready_count == 0 %}disabled{% endif %}>
+            Generate &amp; Print Batch
+          </button>
+        </div>
+        {% endwith %}
+        {% else %}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-blue-50 px-4 py-4 border border-blue-200">
+          <div class="text-sm text-blue-900">
+            Ready to generate <strong>{{ approved_pending }}</strong> letter{{ approved_pending|pluralize }} for <strong>{{ selected_campaign.name }}</strong>.
+            <span class="mt-1 block text-xs text-blue-700">Rejected donations will be skipped — no active issue template configured.</span>
+          </div>
+          <button type="submit"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            {% if approved_pending == 0 %}disabled{% endif %}>
+            Generate &amp; Print Batch
+          </button>
+        </div>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+      <h2 class="text-lg font-medium text-gray-900">Recent batches</h2>
+      <a href="{% url 'custom_admin:letter_batches' selected_campaign.id %}"
+         class="text-sm font-medium text-blue-600 hover:text-blue-700">View all</a>
+    </div>
+    <div class="p-6 space-y-3">
+      {% for batch in recent_batches %}
+      <a href="{% url 'custom_admin:letter_batch_detail' batch.id %}"
+         class="block rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-medium text-gray-900">Batch #{{ batch.batch_number }}</p>
+            <p class="mt-1 text-sm text-gray-500">{{ batch.total_letters }} letters • {{ batch.created_at|date:"d M Y H:i" }}</p>
+          </div>
+          <span class="rounded-full px-3 py-1 text-xs font-semibold {% if batch.status == 'completed' %}bg-green-100 text-green-800{% elif batch.status == 'processing' %}bg-blue-100 text-blue-800{% elif batch.status == 'failed' %}bg-red-100 text-red-800{% else %}bg-gray-100 text-gray-700{% endif %}">
+            {{ batch.status|title }}
+          </span>
+        </div>
+      </a>
+      {% empty %}
+      <p class="text-sm text-gray-500">No batches yet for this campaign.</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% elif selected_client %}
+  <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+    <p class="text-base font-medium text-gray-700">Pick a campaign to see the letters ready to print.</p>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+    <p class="text-base font-medium text-gray-700">Pick a client to begin.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

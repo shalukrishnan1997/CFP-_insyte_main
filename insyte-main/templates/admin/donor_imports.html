@@ -1,0 +1,552 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block title %}Donor Imports - DMS{% endblock %}
+
+{% block page_content %}
+{{ initial_campaigns|json_script:"donor-import-initial-campaigns" }}
+<script>
+window.makeDonorImportPage = function(config) {
+  return {
+    importType: config.importType || 'house_file',
+    selectedClientId: config.selectedClientId || '',
+    selectedCampaignId: config.selectedCampaignId || '',
+    availableCampaigns: [],
+    uploadState: 'idle',
+    uploadProgress: 0,
+    uploadMessage: '',
+    uploadFileName: '',
+    uploadPreviewHeader: '',
+    uploadDetectedDelimiter: '',
+    pollInterval: null,
+
+    init() {
+      this.availableCampaigns = this.normalizeCampaigns(config.initialCampaigns || []);
+      this.syncUrl();
+    },
+
+    buildUploadTaskStatusUrl(taskId) {
+      return `${config.dataFileUploadsUrl}${taskId}/task_status/`;
+    },
+
+    normalizeCampaigns(campaigns) {
+      return campaigns.map((campaign) => ({
+        ...campaign,
+        id: String(campaign.id),
+      }));
+    },
+
+    syncUrl() {
+      const url = new URL(window.location.href);
+      url.searchParams.set('import_type', this.importType);
+      if (this.selectedClientId) {
+        url.searchParams.set('client_id', this.selectedClientId);
+      } else {
+        url.searchParams.delete('client_id');
+      }
+      if (this.importType === 'data_file' && this.selectedCampaignId) {
+        url.searchParams.set('campaign_id', this.selectedCampaignId);
+      } else {
+        url.searchParams.delete('campaign_id');
+      }
+      window.history.replaceState({}, '', url.toString());
+    },
+
+    async onImportTypeChange() {
+      if (this.importType !== 'data_file') {
+        this.selectedCampaignId = '';
+        this.resetUploadState();
+      } else if (this.selectedClientId) {
+        await this.loadCampaigns();
+      }
+      this.syncUrl();
+    },
+
+    async onClientChange() {
+      this.selectedCampaignId = '';
+      this.resetUploadState();
+      if (this.importType === 'data_file' && this.selectedClientId) {
+        await this.loadCampaigns();
+      } else {
+        this.availableCampaigns = [];
+      }
+      this.syncUrl();
+    },
+
+    onCampaignChange() {
+      this.resetUploadState();
+      this.syncUrl();
+    },
+
+    async loadCampaigns() {
+      if (!this.selectedClientId) {
+        this.availableCampaigns = [];
+        return;
+      }
+      try {
+        const campaignsUrl = new URL(config.campaignsApiUrl, window.location.origin);
+        campaignsUrl.searchParams.set('client_id', this.selectedClientId);
+        const response = await fetch(campaignsUrl);
+        if (!response.ok) {
+          this.availableCampaigns = [];
+          return;
+        }
+        const data = await response.json();
+        this.availableCampaigns = this.normalizeCampaigns(data.campaigns || []);
+      } catch (error) {
+        this.availableCampaigns = [];
+      }
+    },
+
+    resetUploadState() {
+      this.uploadState = 'idle';
+      this.uploadProgress = 0;
+      this.uploadMessage = '';
+      this.uploadFileName = '';
+      this.uploadPreviewHeader = '';
+      this.uploadDetectedDelimiter = '';
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+      const input = document.getElementById('data-file-upload');
+      if (input) {
+        input.value = '';
+      }
+    },
+
+    getUploadError(data) {
+      const errors = Array.isArray(data?.error_log) ? data.error_log : [];
+      const firstError = errors[0];
+      if (typeof firstError === 'string') {
+        return firstError;
+      }
+      if (firstError && typeof firstError === 'object') {
+        return firstError.error || firstError.detail || '';
+      }
+      return data?.error || data?.detail || '';
+    },
+
+    getUploadSuccessMessage(data) {
+      const successfulImports = Number(data?.successful_imports || 0);
+      const failedImports = Number(data?.failed_imports || 0);
+      if (successfulImports > 0 && failedImports > 0) {
+        return `Imported ${successfulImports} donors with ${failedImports} row errors.`;
+      }
+      if (successfulImports > 0) {
+        return `Imported ${successfulImports} donors.`;
+      }
+      if (failedImports > 0) {
+        return `Upload finished with ${failedImports} failed rows.`;
+      }
+      return 'Upload complete!';
+    },
+
+    async inspectUploadFile(file) {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        return {
+          warning: 'Only pipe-delimited .csv files are supported.',
+          headerPreview: '',
+          detectedDelimiter: 'Unsupported',
+        };
+      }
+
+      const preview = await file.slice(0, 4096).text();
+      const firstLine = preview.split(/\r?\n/, 1)[0].trim();
+      const detectedDelimiter = firstLine.includes('|')
+        ? 'Pipe (|)'
+        : firstLine.includes(',')
+          ? 'Comma (,)'
+          : firstLine.includes(';')
+            ? 'Semicolon (;)' 
+            : firstLine.includes('\t')
+              ? 'Tab'
+              : firstLine
+                ? 'Unknown'
+                : '';
+
+      if (!firstLine) {
+        return { warning: '', headerPreview: '', detectedDelimiter: '' };
+      }
+      if (firstLine.includes('|')) {
+        return { warning: '', headerPreview: firstLine, detectedDelimiter };
+      }
+      if (firstLine.includes(',')) {
+        return {
+          warning: 'This file looks comma-separated. Download the sample file and use | between columns.',
+          headerPreview: firstLine,
+          detectedDelimiter,
+        };
+      }
+      return {
+        warning: 'This file does not look pipe-delimited. Use | between columns.',
+        headerPreview: firstLine,
+        detectedDelimiter,
+      };
+    },
+
+    async handleDataFileSelection(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        this.resetUploadState();
+        return;
+      }
+
+      this.uploadFileName = file.name;
+      const inspection = await this.inspectUploadFile(file);
+      this.uploadPreviewHeader = inspection.headerPreview;
+      this.uploadDetectedDelimiter = inspection.detectedDelimiter;
+      if (inspection.warning) {
+        this.uploadState = 'error';
+        this.uploadMessage = inspection.warning;
+        event.target.value = '';
+        return;
+      }
+
+      this.uploadMessage = '';
+      this.uploadState = 'ready';
+    },
+
+    async pollUploadStatus(taskId) {
+      try {
+        const response = await fetch(this.buildUploadTaskStatusUrl(taskId));
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          this.uploadState = 'error';
+          this.uploadMessage = this.getUploadError(data) || 'Upload failed';
+          clearInterval(this.pollInterval);
+          this.pollInterval = null;
+          return;
+        }
+
+        const data = await response.json();
+        if (data.status === 'completed') {
+          this.uploadState = 'done';
+          this.uploadProgress = 100;
+          this.uploadMessage = this.getUploadSuccessMessage(data);
+          clearInterval(this.pollInterval);
+          this.pollInterval = null;
+          setTimeout(() => window.location.reload(), 1500);
+        } else if (data.status === 'failed') {
+          this.uploadState = 'error';
+          this.uploadMessage = this.getUploadError(data) || 'Upload failed';
+          clearInterval(this.pollInterval);
+          this.pollInterval = null;
+        } else {
+          this.uploadProgress = Math.min(this.uploadProgress + 10, 95);
+        }
+      } catch (error) {
+        this.uploadState = 'error';
+        this.uploadMessage = 'Unable to check upload status right now.';
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    },
+
+    async uploadDataFile() {
+      const fileInput = document.getElementById('data-file-upload');
+      if (!this.selectedCampaignId || !fileInput || !fileInput.files.length) {
+        this.uploadState = 'error';
+        this.uploadMessage = 'Choose a client, campaign, and CSV file before uploading.';
+        return;
+      }
+
+      this.uploadState = 'uploading';
+      this.uploadProgress = 15;
+      this.uploadMessage = 'Uploading file...';
+
+      try {
+        const formData = new FormData();
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        formData.append('file', fileInput.files[0]);
+        formData.append('data_file', this.selectedCampaignId);
+        const response = await fetch(config.dataFileUploadsUrl, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          this.uploadState = 'error';
+          this.uploadMessage = this.getUploadError(data) || 'Upload failed';
+          return;
+        }
+
+        const data = await response.json();
+        if (data.status === 'completed') {
+          this.uploadState = 'done';
+          this.uploadProgress = 100;
+          this.uploadMessage = this.getUploadSuccessMessage(data);
+          setTimeout(() => window.location.reload(), 1500);
+        } else if (data.status === 'failed') {
+          this.uploadState = 'error';
+          this.uploadMessage = this.getUploadError(data) || 'Upload failed';
+        } else {
+          this.uploadProgress = 30;
+          this.uploadMessage = 'Processing upload...';
+          this.pollInterval = setInterval(() => this.pollUploadStatus(data.id), 3000);
+        }
+      } catch (error) {
+        this.uploadState = 'error';
+        this.uploadMessage = 'Unable to start the upload right now.';
+      }
+    },
+  };
+};
+</script>
+
+<div class="max-w-7xl mx-auto space-y-4"
+     x-data="window.makeDonorImportPage({
+       importType: '{{ import_type }}',
+       selectedClientId: '{{ selected_client_id }}',
+       selectedCampaignId: '{{ selected_campaign_id }}',
+       initialCampaigns: JSON.parse(document.getElementById('donor-import-initial-campaigns').textContent),
+       campaignsApiUrl: '{% url "custom_admin:campaigns_by_client_api" %}',
+       dataFileUploadsUrl: '{% url "custom_admin:data-file-upload-list" %}',
+     })"
+     x-init="init()">
+
+  <div class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <h1 class="text-xl font-semibold text-slate-900">Donor Imports</h1>
+      <p class="mt-1 text-sm text-gray-600">Manage client house files and campaign data files from one operational workflow.</p>
+    </div>
+    <div class="p-4 space-y-4">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="rounded-md border p-4 cursor-pointer transition-all"
+               :class="importType === 'house_file' ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-400' : 'border-gray-200 bg-white hover:bg-gray-50'">
+          <input type="radio" class="sr-only" value="house_file" x-model="importType" @change="onImportTypeChange()">
+          <p class="text-sm font-semibold text-gray-900">House File</p>
+          <p class="mt-1 text-sm text-gray-600">Choose a client and replace that client&apos;s imported house-file source with a new full snapshot.</p>
+        </label>
+        <label class="rounded-md border p-4 cursor-pointer transition-all"
+               :class="importType === 'data_file' ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400' : 'border-gray-200 bg-white hover:bg-gray-50'">
+          <input type="radio" class="sr-only" value="data_file" x-model="importType" @change="onImportTypeChange()">
+          <p class="text-sm font-semibold text-gray-900">Data File</p>
+          <p class="mt-1 text-sm text-gray-600">Choose a client, then a campaign, and upload campaign-specific donor data.</p>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
+          <select x-model="selectedClientId" @change="onClientChange()"
+                  class="dense-select block w-full text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+            <option value="">Choose a client</option>
+            {% for client in clients %}
+            <option value="{{ client.id }}">{{ client.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div x-show="importType === 'data_file'" x-cloak>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Campaign</label>
+          <select x-model="selectedCampaignId" @change="onCampaignChange()"
+                  class="dense-select block w-full text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+            <option value="">Choose a campaign</option>
+            <template x-for="campaign in availableCampaigns" :key="campaign.id">
+              <option :value="campaign.id" x-text="`${campaign.name} (${campaign.status})`"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="flat-card bg-slate-50 px-4 py-3">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Selected Client Donors</p>
+          <p class="mt-2 text-xl font-semibold text-gray-900">{{ house_file_donor_count }}</p>
+        </div>
+        <div class="flat-card border-amber-200 bg-amber-50 px-4 py-3">
+          <p class="text-xs font-medium uppercase tracking-wide text-amber-700">House File Rows Without URN</p>
+          <p class="mt-2 text-xl font-semibold text-amber-800">{{ pending_house_file_count }}</p>
+        </div>
+        <div class="flat-card border-blue-200 bg-blue-50 px-4 py-3">
+          <p class="text-xs font-medium uppercase tracking-wide text-blue-700">Selected Campaign Data Donors</p>
+          <p class="mt-2 text-xl font-semibold text-blue-800">{{ data_file_donor_count }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="importType === 'house_file'" x-cloak class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <h2 class="text-base font-semibold text-slate-900">House File Import</h2>
+      <p class="mt-1 text-sm text-gray-600">Pipe-delimited CSV only. Required columns: urn, first_name, last_name, postcode. Uploading a new file replaces the current imported house-file source for the selected client.</p>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="p-4 space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="import_type" value="house_file">
+      <input type="hidden" name="client_id" :value="selectedClientId">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">House File CSV</label>
+        <input type="file" name="house_file" accept=".csv"
+               class="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+      </div>
+      <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        House-file campaigns use the selected client&apos;s latest imported source rows directly. Data-file campaigns search their campaign data file first, then fall back to the same client&apos;s latest imported house file.
+      </div>
+      <div class="flex justify-end">
+        <button type="submit"
+                class="dense-button inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+          Replace House File
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div x-show="importType === 'data_file'" x-cloak class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <h2 class="text-base font-semibold text-slate-900">Campaign Data File Import</h2>
+      <p class="mt-1 text-sm text-gray-600">Choose a client and campaign, then upload a pipe-delimited donor CSV. The campaign data-file container is created automatically on first upload, and each new upload replaces the previous imported source rows for that campaign.</p>
+    </div>
+    <div class="p-4 space-y-4">
+      <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+        <p>Required columns: <span class="font-semibold">urn</span>, <span class="font-semibold">first_name</span>, <span class="font-semibold">last_name</span>. Optional: title, email, phone, address fields, country, package_code.</p>
+        <div class="mt-3 flex flex-wrap gap-3">
+          <a href="{% url 'custom_admin:campaign_import_sample' %}" download class="dense-button inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100">
+            Download Sample File
+          </a>
+        </div>
+      </div>
+
+      <div class="rounded-md border-2 border-dashed border-blue-300 bg-blue-50 p-4 space-y-4">
+        <div x-show="uploadState === 'idle'" x-cloak class="text-center space-y-2">
+          <label for="data-file-upload" class="cursor-pointer text-sm font-medium text-blue-700 hover:text-blue-900">Choose pipe-delimited CSV file</label>
+          <input type="file" id="data-file-upload" accept=".csv" class="hidden" @change="handleDataFileSelection($event)">
+          <p class="text-xs text-blue-600">The selected campaign gets a data-file container on first upload. Later uploads replace the previous imported source rows for that campaign.</p>
+        </div>
+
+        <div x-show="uploadState === 'ready'" x-cloak class="space-y-3">
+          <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-gray-700">
+            <span x-text="uploadFileName" class="truncate"></span>
+          </div>
+          <div x-show="uploadPreviewHeader" x-cloak class="rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900">
+            <p><span class="font-semibold">Detected delimiter:</span> <span x-text="uploadDetectedDelimiter || 'Unknown'"></span></p>
+            <p class="mt-1 break-all"><span class="font-semibold">Header preview:</span> <span x-text="uploadPreviewHeader"></span></p>
+          </div>
+          <div class="flex justify-end">
+            <button type="button" @click="uploadDataFile()"
+                    class="dense-button inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
+              Upload Campaign Data File
+            </button>
+          </div>
+        </div>
+
+        <div x-show="uploadState === 'uploading'" x-cloak class="space-y-3">
+          <div class="flex items-center gap-3 text-sm text-blue-800">
+            <svg class="w-4 h-4 text-blue-600 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span x-text="uploadMessage || 'Uploading...'"></span>
+          </div>
+          <div class="w-full bg-blue-200 rounded-full h-1.5">
+            <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-300" :style="'width: ' + uploadProgress + '%' "></div>
+          </div>
+        </div>
+
+        <div x-show="uploadState === 'done'" x-cloak class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <span x-text="uploadMessage || 'Upload complete!'"></span>
+        </div>
+
+        <div x-show="uploadState === 'error'" x-cloak class="space-y-3">
+          <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span x-text="uploadMessage || 'Upload failed'"></span>
+          </div>
+          <div x-show="uploadPreviewHeader" x-cloak class="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-red-900">
+            <p><span class="font-semibold">Detected delimiter:</span> <span x-text="uploadDetectedDelimiter || 'Unknown'"></span></p>
+            <p class="mt-1 break-all"><span class="font-semibold">Header preview:</span> <span x-text="uploadPreviewHeader"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if recent_data_file_uploads %}
+  <div class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <h2 class="text-base font-semibold text-slate-900">Recent Data File Uploads</h2>
+      <p class="mt-1 text-sm text-gray-600">Latest campaign data-file imports for the current selection.</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="dense-table min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="text-left">Campaign</th>
+            <th class="text-left">Uploaded By</th>
+            <th class="text-left">When</th>
+            <th class="text-left">Status</th>
+            <th class="text-left">Results</th>
+            <th class="text-left">File</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 bg-white">
+          {% for upload in recent_data_file_uploads %}
+          <tr>
+            <td class="text-gray-700">{{ upload.data_file.campaign.name|default:"—" }}</td>
+            <td class="text-gray-700">
+              {% if upload.uploaded_by %}
+                {{ upload.uploaded_by.get_full_name|default:upload.uploaded_by.username }}
+              {% else %}
+                System
+              {% endif %}
+            </td>
+            <td class="text-gray-700">{{ upload.created_at|date:"d M Y H:i" }}</td>
+            <td>
+              <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium {% if upload.status == 'completed' %}bg-green-100 text-green-700{% elif upload.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                {{ upload.get_status_display }}
+              </span>
+            </td>
+            <td class="text-gray-700">{{ upload.successful_imports }}/{{ upload.total_rows }} imported{% if upload.failed_imports %}, {{ upload.failed_imports }} failed{% endif %}</td>
+            <td>
+              {% if upload.file %}
+              <a href="/admin/api/data-file-uploads/{{ upload.id }}/download/"
+                 class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Download
+              </a>
+              {% else %}
+              <span class="text-xs text-gray-400 italic">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if house_file_filename or house_file_results %}
+  <div class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <h2 class="text-base font-semibold text-slate-900">Latest House File Result</h2>
+    </div>
+    <div class="p-4 space-y-4">
+      {% if house_file_filename %}
+      <p class="text-sm text-gray-600">Processed file: <span class="font-medium text-gray-900">{{ house_file_filename }}</span></p>
+      {% endif %}
+
+      {% if house_file_results %}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="flat-card border-green-200 bg-green-50 px-5 py-4 text-center">
+          <p class="text-2xl font-semibold text-green-700">{{ house_file_results.replaced_count }}</p>
+          <p class="mt-1 text-sm font-medium text-green-600">Rows imported</p>
+        </div>
+        <div class="flat-card border-amber-200 bg-amber-50 px-5 py-4 text-center">
+          <p class="text-2xl font-semibold text-amber-700">{{ house_file_results.deleted_count }}</p>
+          <p class="mt-1 text-sm font-medium text-amber-600">Previous rows removed</p>
+        </div>
+        <div class="flat-card border-red-200 bg-red-50 px-5 py-4 text-center">
+          <p class="text-2xl font-semibold text-red-700">{{ house_file_results.row_errors|length }}</p>
+          <p class="mt-1 text-sm font-medium text-red-600">Validation errors</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock page_content %}

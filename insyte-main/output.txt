@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/check_db.py", line 5, in <module>
+    django.setup()
+    ~~~~~~~~~~~~^^
+  File "/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/.venv/lib/python3.14/site-packages/django/__init__.py", line 24, in setup
+    apps.populate(settings.INSTALLED_APPS)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/.venv/lib/python3.14/site-packages/django/apps/registry.py", line 124, in populate
+    app_config.ready()
+    ~~~~~~~~~~~~~~~~^^
+  File "/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/.venv/lib/python3.14/site-packages/axes/apps.py", line 60, in ready
+  File "/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/.venv/lib/python3.14/site-packages/axes/apps.py", line 32, in initialize
+ImportError: cannot import name 'checks' from 'axes' (/mnt/c/Users/info/OneDrive - Rankraze Technologies Private Limited/Apps/responsehandling/response-test/ResponseHandling-Insyte/.venv/lib/python3.14/site-packages/axes/__init__.py)

@@ -1,0 +1,1089 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Phone Donation Intake — {{ campaign.name }} — DMS{% endblock %}
+
+{% block extra_head %}
+<script src="https://js.stripe.com/v3/"></script>
+{% endblock %}
+
+{% block page_content %}
+<div class="max-w-7xl mx-auto space-y-6"
+     x-data="phoneIntake({
+       campaignId: '{{ campaign.id }}',
+       donorSearchUrl: '{{ donor_search_url }}',
+       addressLookupUrl: '{{ address_lookup_url }}',
+       createDonationUrl: '{% url 'custom_admin:phone_intake_create_donation' %}',
+       createDonorUrl: '{% url 'custom_admin:phone_intake_create_system_donor' %}',
+       chargeUrl: '{% url 'custom_admin:phone_intake_charge' %}',
+       refundUrl: '{% url 'custom_admin:phone_intake_refund' %}',
+       stripePublishableKey: '{{ stripe_publishable_key }}',
+       csrfToken: '{{ csrf_token }}',
+       initialBatchTotal: '{{ todays_batch.total_amount }}',
+       initialBatchCount: {{ todays_batch.total_donations|default:0 }},
+     })">
+
+  <!-- Page header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Phone Donation Intake</h1>
+      <p class="mt-1 text-sm text-gray-600">
+        Campaign: <span class="font-medium">{{ campaign.name }}</span> ·
+        Client: <span class="font-medium">{{ client.name }}</span> ·
+        <span class="text-gray-500">{{ today }}</span>
+      </p>
+      <a href="{% url 'custom_admin:phone_intake_help' %}"
+         class="inline-block mt-1 text-xs text-blue-700 hover:underline">Operator playbook ↗</a>
+    </div>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-right">
+      <div class="text-xs uppercase text-blue-700 font-medium">Today's batch</div>
+      <div class="text-lg font-semibold text-blue-900">
+        £<span x-text="batchTotal">{{ todays_batch.total_amount }}</span>
+        <span class="text-sm text-blue-700 font-normal">
+          (<span x-text="batchCount">{{ todays_batch.total_donations|default:0 }}</span> donations)
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- LEFT: Donor search + inline create -->
+    <section class="bg-white rounded-lg shadow p-6 space-y-4">
+      <h2 class="text-lg font-semibold text-gray-900">Donor</h2>
+
+      <!-- Selected donor card -->
+      <template x-if="selectedDonor">
+        <div class="border border-green-300 bg-green-50 rounded p-4 space-y-1">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-medium text-gray-900" x-text="selectedDonor.full_name || (selectedDonor.first_name + ' ' + selectedDonor.last_name)"></div>
+              <div class="text-sm text-gray-600">
+                URN: <span x-text="selectedDonor.urn || '—'"></span> ·
+                <span x-text="selectedDonor.postcode"></span>
+              </div>
+              <div class="text-sm text-gray-600">
+                <span x-text="selectedDonor.phone || 'no phone'"></span> ·
+                <span x-text="selectedDonor.email || 'no email'"></span>
+              </div>
+              <div class="text-xs mt-1">
+                <span class="inline-block px-2 py-0.5 rounded text-white"
+                      :class="{
+                        'bg-blue-600': selectedDonor.source === 'system_donor',
+                        'bg-gray-600': selectedDonor.source === 'house_file',
+                        'bg-purple-600': selectedDonor.source === 'data_file',
+                      }"
+                      x-text="selectedDonor.source"></span>
+                <template x-if="selectedDonor.pending_review">
+                  <span class="inline-block ml-1 px-2 py-0.5 rounded bg-orange-500 text-white">Pending QA</span>
+                </template>
+              </div>
+            </div>
+            <button type="button" @click="clearDonor()" class="text-sm text-red-600 hover:text-red-800">Clear</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Search input + results -->
+      <template x-if="!selectedDonor">
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Search by URN, name, postcode, phone, or email</label>
+            <input type="text" x-model="searchQuery" @input.debounce.300ms="searchDonors()"
+                   class="mt-1 block w-full px-3 py-2 border rounded"
+                   placeholder="e.g. John Smith, SW1A 1AA, 07700 900 123, ABC123" />
+            <p class="text-xs text-gray-500 mt-1">Minimum 2 characters. Phone and postcode are normalised — spaces and hyphens don't matter.</p>
+          </div>
+
+          <!-- Search results -->
+          <template x-if="searchResults.length > 0">
+            <ul class="border rounded divide-y max-h-72 overflow-y-auto">
+              <template x-for="donor in searchResults" :key="donor.id">
+                <li class="p-3 hover:bg-gray-50 cursor-pointer" @click="selectDonor(donor)">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <div class="font-medium text-gray-900" x-text="donor.full_name || (donor.first_name + ' ' + donor.last_name)"></div>
+                      <div class="text-xs text-gray-600">
+                        URN: <span x-text="donor.urn || '—'"></span> ·
+                        <span x-text="donor.postcode"></span> ·
+                        <span x-text="donor.phone || 'no phone'"></span>
+                      </div>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded text-white"
+                          :class="{
+                            'bg-blue-600': donor.source === 'system_donor',
+                            'bg-gray-600': donor.source === 'house_file',
+                            'bg-purple-600': donor.source === 'data_file',
+                          }"
+                          x-text="donor.source"></span>
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </template>
+          <template x-if="searchPerformed && searchResults.length === 0">
+            <p class="text-sm text-gray-500 italic">No donors matched. Create a new one below.</p>
+          </template>
+
+          <!-- Create new donor toggle -->
+          <button type="button" @click="showNewDonorForm = !showNewDonorForm"
+                  class="text-sm text-blue-600 hover:text-blue-800">
+            <span x-show="!showNewDonorForm">+ Create new donor inline</span>
+            <span x-show="showNewDonorForm">— Cancel new donor</span>
+          </button>
+
+          <!-- Inline new-donor form -->
+          <div x-show="showNewDonorForm" x-cloak class="bg-gray-50 border rounded p-4 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-700">Title</label>
+                <input type="text" x-model="newDonor.title" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">External URN (optional)</label>
+                <input type="text" x-model="newDonor.external_urn" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">First name *</label>
+                <input type="text" x-model="newDonor.first_name" required class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">Last name *</label>
+                <input type="text" x-model="newDonor.last_name" required class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">Phone</label>
+                <input type="tel" x-model="newDonor.phone" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">Email</label>
+                <input type="email" x-model="newDonor.email" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-700">Postcode (lookup populates address)</label>
+                <div class="flex gap-2">
+                  <input type="text" x-model="newDonor.postcode" class="mt-1 block flex-1 px-2 py-1 border rounded text-sm" />
+                  <button type="button" @click="lookupAddress()" class="mt-1 px-3 py-1 bg-gray-200 rounded text-sm">Lookup</button>
+                </div>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-700">Address line 1</label>
+                <input type="text" x-model="newDonor.address_line1" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-700">Address line 2</label>
+                <input type="text" x-model="newDonor.address_line2" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">City</label>
+                <input type="text" x-model="newDonor.city" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700">County</label>
+                <input type="text" x-model="newDonor.county" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+              </div>
+              <div class="col-span-2 grid grid-cols-2 gap-2 mt-2 text-sm">
+                <label class="inline-flex items-center"><input type="checkbox" x-model="newDonor.consent_contact" class="mr-2" /> Consent to contact</label>
+                <label class="inline-flex items-center"><input type="checkbox" x-model="newDonor.opt_in_phone" class="mr-2" /> Opt in to phone</label>
+                <label class="inline-flex items-center"><input type="checkbox" x-model="newDonor.opt_in_email" class="mr-2" /> Opt in to email</label>
+                <label class="inline-flex items-center"><input type="checkbox" x-model="newDonor.opt_in_post" class="mr-2" /> Opt in to post</label>
+                <label class="inline-flex items-center"><input type="checkbox" x-model="newDonor.gift_aid_declaration" class="mr-2" /> Gift Aid declared</label>
+              </div>
+            </div>
+            <button type="button" @click="createDonor()"
+                    :disabled="!newDonor.first_name || !newDonor.last_name"
+                    class="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+              Create donor &amp; attach
+            </button>
+            <p x-show="newDonorError" x-text="newDonorError" class="text-sm text-red-600"></p>
+          </div>
+        </div>
+      </template>
+    </section>
+
+    <!-- RIGHT: Donation form -->
+    <section class="bg-white rounded-lg shadow p-6 space-y-4">
+      <h2 class="text-lg font-semibold text-gray-900">Donation</h2>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">
+            Amount (£)
+            <span x-show="donation.payment_method !== 'non_financial'">*</span>
+            <span x-show="donation.payment_method === 'non_financial'" class="text-gray-400 text-xs">(N/A)</span>
+          </label>
+          <input type="text" inputmode="decimal" x-model="donation.amount" placeholder="0.00"
+                 :disabled="donation.payment_method === 'non_financial'"
+                 class="mt-1 block w-full px-3 py-2 border rounded disabled:bg-gray-100" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Donation date</label>
+          <input type="date" x-model="donation.donation_date"
+                 class="mt-1 block w-full px-3 py-2 border rounded" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Payment method *</label>
+          <select x-model="donation.payment_method"
+                  class="mt-1 block w-full px-3 py-2 border rounded">
+            <option value="">Select payment method</option>
+            {% for value, label in payment_method_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-span-2 flex items-center gap-4"
+             x-show="donation.payment_method !== 'non_financial'">
+          <label class="inline-flex items-center text-sm">
+            <input type="checkbox" x-model="donation.gift_aid" class="mr-2" />
+            Gift Aid declaration recorded
+          </label>
+        </div>
+
+        <!-- Frequency (DD only — Phase 3 wires recurring) -->
+        <div class="col-span-2" x-show="donation.payment_method === 'direct_debit'">
+          <label class="block text-sm font-medium text-gray-700">Frequency *</label>
+          <select x-model="donation.donation_frequency" class="mt-1 block w-full px-3 py-2 border rounded">
+            <option value="">Select frequency</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annually">Annually</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Cheque block -->
+      <div x-show="donation.payment_method === 'cheque' || donation.payment_method === 'postal_order'"
+           x-cloak class="bg-gray-50 p-3 rounded space-y-3">
+        <h3 class="text-sm font-medium text-gray-800">Cheque / Postal Order details (fill in when received)</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-700">Cheque / PO number (optional at intake)</label>
+            <input type="text" x-model="donation.cheque_number" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-700">Cheque / PO date (optional)</label>
+            <input type="date" x-model="donation.cheque_date" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+        </div>
+        <p class="text-xs text-gray-500">If the donor is posting the cheque, leave blank — daily-banking will fill these in.</p>
+      </div>
+
+      <!-- CAF block -->
+      <div x-show="donation.payment_method === 'caf'" x-cloak class="bg-gray-50 p-3 rounded space-y-3">
+        <h3 class="text-sm font-medium text-gray-800">CAF voucher details</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-700">CAF voucher number</label>
+            <input type="text" x-model="donation.caf_voucher_number" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-700">CAF amount (£)</label>
+            <input type="text" inputmode="decimal" x-model="donation.caf_amount" class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Direct Debit block: capture-only (no provider integration yet) -->
+      <div x-show="donation.payment_method === 'direct_debit'" x-cloak
+           class="bg-yellow-50 border border-yellow-200 p-3 rounded space-y-3">
+        <h3 class="text-sm font-medium text-gray-800">Direct Debit (capture-only — bank details + mandate consent)</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-700">Sort code (6 digits)</label>
+            <input type="text" inputmode="numeric" pattern="[0-9-]*" maxlength="8"
+                   x-model="donation.sort_code" autocomplete="off"
+                   placeholder="60-83-71"
+                   class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-700">Account number (6–8 digits)</label>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10"
+                   x-model="donation.account_number" autocomplete="off"
+                   placeholder="12345678"
+                   class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-700">First charge date</label>
+            <input type="date" x-model="donation.direct_debit_start_date"
+                   class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-700">Account holder name</label>
+            <input type="text" x-model="donation.card_holder_name"
+                   autocomplete="off"
+                   class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+          </div>
+        </div>
+
+        <!-- Mandate text + required consent -->
+        <div class="bg-white border border-yellow-300 rounded p-3 mt-2">
+          <p class="text-xs font-medium text-gray-800 mb-2">Mandate text (read this verbatim to the donor):</p>
+          <p class="text-xs italic text-gray-700 leading-relaxed" x-text="renderedMandateText"></p>
+          <label class="flex items-start gap-2 mt-3 text-xs">
+            <input type="checkbox" x-model="ddVerbatimRead" class="mt-0.5" />
+            <span>I read the mandate text verbatim to the donor and they confirmed authorisation.</span>
+          </label>
+        </div>
+
+        <!-- BACS override (rare — for non-standard accounts) -->
+        <label class="flex items-start gap-2 text-xs text-gray-600">
+          <input type="checkbox" x-model="bacsOverride" class="mt-0.5" />
+          <span>Force save (skip BACS format check). Donation will be flagged for QA verification.</span>
+        </label>
+
+        <p class="text-xs text-yellow-800">
+          No mandate is created with the bank in this phase. The donation lands at
+          <code>payment_status=pending</code> with the consent block on
+          <code>field_data.dd_mandate_consent</code>; banking processes the mandate downstream.
+        </p>
+      </div>
+
+      <!-- Card block: Stripe Elements MOTO auth (auth-at-intake, capture-at-QA) -->
+      <div x-show="donation.payment_method === 'card'" x-cloak
+           class="bg-blue-50 border border-blue-200 p-3 rounded space-y-3">
+        <h3 class="text-sm font-medium text-blue-900">Card details (MOTO authorisation)</h3>
+        <p class="text-xs text-blue-700">
+          Stripe authorises the card now and we capture the funds when QA approves the donation.
+          The donor sees a pending hold on their statement; rejection releases it.
+        </p>
+        <template x-if="!stripeReady">
+          <div class="text-sm text-red-700 space-y-1">
+            <p>
+              Stripe is not configured for this client — card MOTO is unavailable.
+              Use a different payment method or ask an admin to set up the gateway config.
+            </p>
+            {% if stripe_unavailable_reason %}
+              <p class="text-xs text-red-600">
+                <span class="font-medium">Reason:</span> {{ stripe_unavailable_reason }}
+              </p>
+            {% endif %}
+          </div>
+        </template>
+        <template x-if="stripeReady">
+          <div class="space-y-2">
+            <div>
+              <label class="block text-xs text-gray-700">Cardholder name</label>
+              <input type="text" x-model="donation.card_holder_name"
+                     autocomplete="cc-name"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Card details</label>
+              <div id="phone-card-element" class="mt-1 p-2 bg-white border rounded"></div>
+              <p x-show="cardError" x-text="cardError" class="text-xs text-red-700 mt-1"></p>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Donor edit / non-financial donor-update block.
+           Always available when a donor is selected; the panel collapses
+           by default for financial payment methods so a quick card call
+           stays uncluttered. Auto-expands for non-financial intake. -->
+      <div x-show="selectedDonor" x-cloak
+           class="bg-purple-50 border border-purple-200 p-3 rounded space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h3 class="text-sm font-medium text-purple-900"
+                x-text="donation.payment_method === 'non_financial' ? 'Non-financial donor update' : 'Edit donor details'"></h3>
+            <!-- Summary reflects unsaved donor edits live: bind to
+                 ``donorEdits`` (hydrated on selectedDonor change) with
+                 ``selectedDonor`` as the fallback for the brief moment
+                 before hydration completes or for fields that aren't
+                 part of the editable surface. -->
+            <p class="text-xs text-purple-700 truncate"
+               x-show="selectedDonor"
+               x-text="(() => {
+                 if (!selectedDonor) return '—';
+                 const fn = donorEdits.first_name || selectedDonor.first_name || '';
+                 const ln = donorEdits.last_name || selectedDonor.last_name || '';
+                 const name = (fn + ' ' + ln).trim() || selectedDonor.full_name || '—';
+                 const urn = donorEdits.urn || selectedDonor.external_urn || selectedDonor.urn || '';
+                 const pc  = donorEdits.postcode || selectedDonor.postcode || '';
+                 return name + (urn ? ' · URN ' + urn : '') + (pc ? ' · ' + pc : '');
+               })()"></p>
+          </div>
+          <button type="button"
+                  @click="donorEditExpanded = !donorEditExpanded"
+                  x-show="donation.payment_method !== 'non_financial'"
+                  class="shrink-0 px-2 py-1 text-xs border border-purple-300 text-purple-800 rounded hover:bg-purple-100">
+            <span x-show="!donorEditExpanded">Edit donor</span>
+            <span x-show="donorEditExpanded">Hide donor edits</span>
+          </button>
+        </div>
+        <p class="text-xs text-purple-700" x-show="donorEditExpanded">
+          <strong>Donor changes save immediately</strong> when you click <em>Save donation</em>.
+          QA review will not revert changes — manual revert via admin if needed.
+        </p>
+
+        <div x-show="donorEditExpanded" x-cloak class="space-y-4">
+        <!-- Donor status -->
+        <fieldset class="space-y-2">
+          <legend class="text-xs font-semibold text-gray-800">Donor status</legend>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-700">Contact status</label>
+              <select x-model="donorEdits.contact_status"
+                      class="mt-1 block w-full px-2 py-1 border rounded text-sm">
+                <option value="">— No change —</option>
+                {% for value, label in donor_contact_status_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Status reason</label>
+              <input type="text" x-model="donorEdits.contact_status_reason"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm"
+                     placeholder="e.g. family informed us / RTS letter" />
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Identity -->
+        <fieldset class="space-y-2">
+          <legend class="text-xs font-semibold text-gray-800">Identity</legend>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs text-gray-700">Title</label>
+              <input type="text" x-model="donorEdits.title"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">First name</label>
+              <input type="text" x-model="donorEdits.first_name"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Last name</label>
+              <input type="text" x-model="donorEdits.last_name"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">URN</label>
+              <input type="text" x-model="donorEdits.urn"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Date of birth</label>
+              <input type="date" x-model="donorEdits.date_of_birth"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Age</label>
+              <input type="number" min="0" x-model="donorEdits.age"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Address -->
+        <fieldset class="space-y-2">
+          <legend class="text-xs font-semibold text-gray-800">Address</legend>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <label class="block text-xs text-gray-700">Address line 1</label>
+              <input type="text" x-model="donorEdits.address_line1"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs text-gray-700">Address line 2</label>
+              <input type="text" x-model="donorEdits.address_line2"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">City</label>
+              <input type="text" x-model="donorEdits.city"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">County</label>
+              <input type="text" x-model="donorEdits.county"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Postcode</label>
+              <input type="text" x-model="donorEdits.postcode"
+                     @blur="lookupAddressForEdits()"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Country</label>
+              <input type="text" x-model="donorEdits.country"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Contact + opt-ins -->
+        <fieldset class="space-y-2">
+          <legend class="text-xs font-semibold text-gray-800">Contact &amp; preferences</legend>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-700">Email</label>
+              <input type="email" x-model="donorEdits.email"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Phone</label>
+              <input type="text" x-model="donorEdits.phone"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            <label class="inline-flex items-center"><input type="checkbox" x-model="donorEdits.consent_contact" class="mr-1" /> Consent to contact</label>
+            <label class="inline-flex items-center"><input type="checkbox" x-model="donorEdits.opt_in_email" class="mr-1" /> Email</label>
+            <label class="inline-flex items-center"><input type="checkbox" x-model="donorEdits.opt_in_sms" class="mr-1" /> SMS</label>
+            <label class="inline-flex items-center"><input type="checkbox" x-model="donorEdits.opt_in_phone" class="mr-1" /> Phone</label>
+            <label class="inline-flex items-center"><input type="checkbox" x-model="donorEdits.opt_in_post" class="mr-1" /> Post</label>
+            <label class="inline-flex items-center"
+                   x-show="selectedDonor && selectedDonor.source === 'data_file'">
+              <input type="checkbox" x-model="donorEdits.no_thank_you" class="mr-1" /> No thank-you letter
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Gift aid -->
+        <fieldset class="space-y-2">
+          <legend class="text-xs font-semibold text-gray-800">Gift aid</legend>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="inline-flex items-center text-xs">
+              <input type="checkbox" x-model="donorEdits.gift_aid_declaration" class="mr-1" />
+              Gift Aid declaration on file
+            </label>
+            <div>
+              <label class="block text-xs text-gray-700">Gift Aid date</label>
+              <input type="date" x-model="donorEdits.gift_aid_date"
+                     class="mt-1 block w-full px-2 py-1 border rounded text-sm" />
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Non-financial-specific: reason for the call + free-text notes.
+             Only relevant when payment_method is non_financial; for paying
+             calls these belong on the donation row (not on the donor edit). -->
+        <fieldset class="space-y-2"
+                  x-show="donation.payment_method === 'non_financial'">
+          <legend class="text-xs font-semibold text-gray-800">Call reason &amp; notes</legend>
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <label class="block text-xs text-gray-700">Reason for the call *</label>
+              <select x-model="donation.non_financial_reason"
+                      class="mt-1 block w-full px-2 py-1 border rounded text-sm">
+                <option value="">Select reason</option>
+                {% for value, label in non_financial_reason_choices %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-700">Notes</label>
+              <textarea x-model="donation.non_financial_notes" rows="2"
+                        class="mt-1 block w-full px-2 py-1 border rounded text-sm"
+                        placeholder="Free-text notes for QA review"></textarea>
+            </div>
+          </div>
+        </fieldset>
+        </div>
+      </div>
+
+      <button type="button" @click="submitDonation()"
+              :disabled="!canSubmit"
+              class="w-full py-3 bg-green-600 text-white rounded font-medium hover:bg-green-700 disabled:opacity-50">
+        Save donation
+      </button>
+      <p x-show="submitMessage" x-text="submitMessage" class="text-sm" :class="submitOk ? 'text-green-700' : 'text-red-700'"></p>
+      <div x-show="lastChargedDonation" class="text-sm flex items-center gap-2">
+        <span class="text-gray-600">Made a mistake?</span>
+        <button type="button"
+                @click="refundLastDonation()"
+                :disabled="refundInFlight"
+                class="px-3 py-1 text-sm border border-red-300 text-red-700 rounded hover:bg-red-50 disabled:opacity-50">
+          Refund this donation
+        </button>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+function phoneIntake(config) {
+  return {
+    config,
+    searchQuery: '',
+    searchResults: [],
+    searchPerformed: false,
+    selectedDonor: null,
+    showNewDonorForm: false,
+    newDonor: {
+      title: '', external_urn: '', first_name: '', last_name: '',
+      phone: '', email: '', postcode: '',
+      address_line1: '', address_line2: '', city: '', county: '',
+      consent_contact: false, opt_in_phone: false, opt_in_email: false,
+      opt_in_post: false, gift_aid_declaration: false,
+    },
+    newDonorError: '',
+    donation: {
+      amount: '',
+      currency: 'GBP',
+      payment_method: '',
+      donation_date: new Date().toISOString().slice(0, 10),
+      gift_aid: false,
+      donation_frequency: '',
+      cheque_number: '', cheque_date: '',
+      caf_voucher_number: '', caf_amount: '',
+      postal_order_number: '', postal_order_date: '',
+      sort_code: '', account_number: '', direct_debit_start_date: '',
+      card_holder_name: '', card_last_four: '', card_expiry_date: '',
+      non_financial_reason: '', non_financial_notes: '',
+    },
+    donorEdits: {
+      title: '', first_name: '', last_name: '', urn: '',
+      date_of_birth: '', age: '',
+      address_line1: '', address_line2: '', city: '', county: '',
+      postcode: '', country: '',
+      email: '', phone: '',
+      consent_contact: false, opt_in_email: false, opt_in_sms: false,
+      opt_in_phone: false, opt_in_post: false, no_thank_you: false,
+      gift_aid_declaration: false, gift_aid_date: '',
+      contact_status: '', contact_status_reason: '',
+    },
+    donorEditsHydratedFor: null,
+    // Donor-edit panel visibility. Initial value is computed from
+    // payment_method in init() so a refresh / deep-link on non-financial
+    // lands expanded. Toggling this is visibility-only — donor edits are
+    // never discarded by collapse.
+    donorEditExpanded: false,
+    submitMessage: '',
+    submitOk: false,
+    batchTotal: config.initialBatchTotal,
+    batchCount: config.initialBatchCount,
+    lastChargedDonation: null,
+    refundInFlight: false,
+
+    // Stripe Elements state
+    stripeReady: false,
+    stripe: null,
+    cardElement: null,
+    cardError: '',
+    cardMounted: false,
+
+    // Direct Debit consent state
+    ddVerbatimRead: false,
+    bacsOverride: false,
+    clientName: '{{ client.name|escapejs }}',
+
+    get renderedMandateText() {
+      const amount = parseFloat(this.donation.amount) || 0;
+      const start = this.donation.direct_debit_start_date || 'the agreed date';
+      const freq = this.donation.donation_frequency || 'as agreed';
+      return (
+        'I authorise ' + (this.clientName || 'the charity') +
+        ' to send instructions to my bank or building society to debit my account ' +
+        'in accordance with the Direct Debit Guarantee. I confirm that I am the ' +
+        'account holder and the only person required to authorise debits from this ' +
+        'account. The first payment of £' + amount.toFixed(2) +
+        ' will be collected on or after ' + start + ', recurring ' + freq + '.'
+      );
+    },
+
+    init() {
+      if (this.config.stripePublishableKey && window.Stripe) {
+        this.stripe = window.Stripe(this.config.stripePublishableKey);
+        this.stripeReady = true;
+      }
+      // Donor-edit panel: expanded by default for non-financial intake
+      // (the whole purpose of that flow), collapsed for paying calls so
+      // operators see a tidy form. Compute on mount so a refresh / deep
+      // link lands in the right state — a watcher alone misses the
+      // initial render.
+      this.donorEditExpanded = this.donation.payment_method === 'non_financial';
+      // Mount Stripe Elements lazily when the operator picks card.
+      this.$watch('donation.payment_method', (m) => {
+        if (m === 'card' && this.stripeReady && !this.cardMounted) {
+          // Defer to next tick so the x-show div is rendered.
+          setTimeout(() => this.mountCardElement(), 0);
+        }
+        // Auto-expand the donor-edit panel when the operator switches
+        // *into* non-financial — donor edits are the purpose of that flow.
+        // Switching away does NOT auto-collapse: the operator may have
+        // typed fixes and still want them visible.
+        if (m === 'non_financial') {
+          this.donorEditExpanded = true;
+        }
+      });
+      // Pre-populate donor-edit fields whenever a donor is selected,
+      // regardless of payment method. Donor edits are now available for
+      // every payment method (PR #154); the panel just defaults to
+      // collapsed for paying calls.
+      this.$watch('selectedDonor', () => {
+        this.maybeHydrateDonorEdits();
+      });
+    },
+
+    maybeHydrateDonorEdits() {
+      if (!this.selectedDonor) {
+        this.resetDonorEdits();
+        this.donorEditsHydratedFor = null;
+        return;
+      }
+      const key = this.selectedDonor.system_donor_id
+                ?? this.selectedDonor.donor_pk
+                ?? this.selectedDonor.data_file_donor_id
+                ?? this.selectedDonor.id;
+      if (this.donorEditsHydratedFor === key) return;
+      const d = this.selectedDonor;
+      this.donorEdits = {
+        title: d.title || '',
+        first_name: d.first_name || '',
+        last_name: d.last_name || '',
+        urn: d.external_urn || d.urn || '',
+        date_of_birth: d.date_of_birth || '',
+        age: (d.age == null ? '' : String(d.age)),
+        address_line1: d.address_line1 || '',
+        address_line2: d.address_line2 || '',
+        city: d.city || '',
+        county: d.county || '',
+        postcode: d.postcode || '',
+        country: d.country || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        consent_contact: !!d.consent_contact,
+        opt_in_email: !!d.opt_in_email,
+        opt_in_sms: !!d.opt_in_sms,
+        opt_in_phone: !!d.opt_in_phone,
+        opt_in_post: !!d.opt_in_post,
+        no_thank_you: !!d.no_thank_you,
+        gift_aid_declaration: !!d.gift_aid_declaration,
+        gift_aid_date: d.gift_aid_date || '',
+        contact_status: d.contact_status || '',
+        contact_status_reason: d.contact_status_reason || '',
+      };
+      this.donorEditsHydratedFor = key;
+    },
+
+    resetDonorEdits() {
+      this.donorEdits = {
+        title: '', first_name: '', last_name: '', urn: '',
+        date_of_birth: '', age: '',
+        address_line1: '', address_line2: '', city: '', county: '',
+        postcode: '', country: '',
+        email: '', phone: '',
+        consent_contact: false, opt_in_email: false, opt_in_sms: false,
+        opt_in_phone: false, opt_in_post: false, no_thank_you: false,
+        gift_aid_declaration: false, gift_aid_date: '',
+        contact_status: '', contact_status_reason: '',
+      };
+    },
+
+    async lookupAddressForEdits() {
+      const pc = (this.donorEdits.postcode || '').trim();
+      if (!pc) return;
+      const url = new URL(this.config.addressLookupUrl, window.location.origin);
+      url.searchParams.set('postcode', pc);
+      const resp = await fetch(url, { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (data && Array.isArray(data.addresses) && data.addresses.length > 0) {
+        const a = data.addresses[0];
+        this.donorEdits.address_line1 = a.line_1 || this.donorEdits.address_line1;
+        this.donorEdits.address_line2 = a.line_2 || this.donorEdits.address_line2;
+        this.donorEdits.city = a.town_or_city || a.locality || this.donorEdits.city;
+        this.donorEdits.county = a.county || this.donorEdits.county;
+      }
+    },
+
+    mountCardElement() {
+      if (this.cardMounted) return;
+      const elements = this.stripe.elements();
+      // hidePostalCode matches the QA review template. Stripe Elements'
+      // postcode field defaults to US ZIP validation (5 digits) when no
+      // country context is passed, which rejects UK postcodes. The donor's
+      // full UK address is captured separately on the SystemDonor record.
+      this.cardElement = elements.create('card', { hidePostalCode: true });
+      this.cardElement.mount('#phone-card-element');
+      this.cardElement.on('change', (e) => {
+        this.cardError = e.error ? e.error.message : '';
+      });
+      this.cardMounted = true;
+    },
+
+    get canSubmit() {
+      if (!this.selectedDonor || !this.donation.payment_method) return false;
+      // Non-financial donor-update: amount is forced to 0; require a reason.
+      if (this.donation.payment_method === 'non_financial') {
+        return !!this.donation.non_financial_reason;
+      }
+      const amount = parseFloat(this.donation.amount);
+      if (!(amount > 0)) return false;
+      // For card donations we also need Stripe to be ready (gateway config + JS loaded).
+      if (this.donation.payment_method === 'card' && !this.stripeReady) return false;
+      // For DD donations the operator must confirm the mandate was read verbatim.
+      if (this.donation.payment_method === 'direct_debit' && !this.ddVerbatimRead) return false;
+      return true;
+    },
+
+    async searchDonors() {
+      this.submitMessage = '';
+      if (this.searchQuery.length < 2) {
+        this.searchResults = [];
+        this.searchPerformed = false;
+        return;
+      }
+      const url = new URL(this.config.donorSearchUrl, window.location.origin);
+      url.searchParams.set('q', this.searchQuery);
+      url.searchParams.set('campaign_id', this.config.campaignId);
+      const resp = await fetch(url, { credentials: 'same-origin' });
+      const data = await resp.json();
+      this.searchResults = data.donors || [];
+      this.searchPerformed = true;
+    },
+
+    selectDonor(donor) {
+      this.selectedDonor = donor;
+      this.searchResults = [];
+      this.searchQuery = '';
+    },
+
+    clearDonor() {
+      this.selectedDonor = null;
+    },
+
+    async lookupAddress() {
+      const pc = (this.newDonor.postcode || '').trim();
+      if (!pc) return;
+      const url = new URL(this.config.addressLookupUrl, window.location.origin);
+      url.searchParams.set('postcode', pc);
+      const resp = await fetch(url, { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (data && Array.isArray(data.addresses) && data.addresses.length > 0) {
+        const a = data.addresses[0];
+        this.newDonor.address_line1 = a.line_1 || '';
+        this.newDonor.address_line2 = a.line_2 || '';
+        this.newDonor.city = a.town_or_city || a.locality || '';
+        this.newDonor.county = a.county || '';
+      }
+    },
+
+    async createDonor() {
+      this.newDonorError = '';
+      const payload = { campaign_id: this.config.campaignId, ...this.newDonor };
+      const resp = await fetch(this.config.createDonorUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.config.csrfToken },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        this.newDonorError = err.error || 'Failed to create donor';
+        return;
+      }
+      const donor = await resp.json();
+      donor.full_name = donor.full_name || (donor.first_name + ' ' + donor.last_name);
+      this.selectDonor(donor);
+      this.showNewDonorForm = false;
+    },
+
+    async submitDonation() {
+      this.submitMessage = '';
+      if (!this.canSubmit) {
+        this.submitMessage = this.donation.payment_method === 'non_financial'
+          ? 'Pick a donor and choose a reason for the call.'
+          : 'Pick a donor, set amount > 0, and choose a payment method.';
+        this.submitOk = false;
+        return;
+      }
+      const isNonFinancial = this.donation.payment_method === 'non_financial';
+      const payload = {
+        campaign_id: this.config.campaignId,
+        ...this.donation,
+        donor_source: this.selectedDonor.source === 'data_file' ? 'data_file' : 'house_file',
+        system_donor_id: this.selectedDonor.system_donor_id || null,
+        donor_pk: this.selectedDonor.donor_pk || null,
+        data_file_donor_id: this.selectedDonor.data_file_donor_id || null,
+        dd_mandate_consent:
+          this.donation.payment_method === 'direct_debit'
+            ? { verbatim_read_aloud: this.ddVerbatimRead }
+            : null,
+        bacs_validation_overridden: this.bacsOverride,
+      };
+      if (isNonFinancial) {
+        // Server enforces these too; defence in depth.
+        payload.amount = '0.00';
+        payload.gift_aid = false;
+      }
+      // Always serialise donor edits when a donor is linked. The server
+      // whitelists fields against PHONE_INTAKE_EDITABLE_FIELDS and the
+      // mutation step diffs values before writing, so unchanged fields
+      // are no-ops. donorEdits is hydrated from the selected donor on
+      // every donor switch, so for an unedited card call this still
+      // matches the donor's current state — no spurious mutations.
+      if (this.selectedDonor) {
+        payload.donor_contact_status = this.donorEdits.contact_status || '';
+        payload.donor_contact_status_reason = this.donorEdits.contact_status_reason || '';
+        for (const key of Object.keys(this.donorEdits)) {
+          if (key === 'contact_status' || key === 'contact_status_reason') continue;
+          payload['donor_' + key] = this.donorEdits[key];
+        }
+      }
+      const resp = await fetch(this.config.createDonationUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.config.csrfToken },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        this.submitMessage = err.error || 'Failed to save donation';
+        this.submitOk = false;
+        return;
+      }
+      const data = await resp.json();
+
+      // For card MOTO: tokenize via Stripe Elements and call the charge endpoint.
+      this.lastChargedDonation = null;
+      if (data.requires_charge && this.donation.payment_method === 'card') {
+        const chargeOk = await this.chargeCard(data.donation_id);
+        if (!chargeOk) {
+          // chargeCard sets submitMessage; preserve its detail.
+          // Refresh batch totals — donation row exists even if charge failed.
+          this.batchTotal = data.todays_batch.total_amount;
+          this.batchCount = data.todays_batch.total_donations;
+          return;
+        }
+        // chargeCard sets a status-specific message — don't overwrite it.
+      } else {
+        this.submitMessage = 'Donation saved (status: ' + data.qa_status + '). Ready for next call.';
+      }
+
+      this.submitOk = true;
+      this.batchTotal = data.todays_batch.total_amount;
+      this.batchCount = data.todays_batch.total_donations;
+      this.resetForNextCall();
+    },
+
+    async chargeCard(donationId) {
+      this.cardError = '';
+      const result = await this.stripe.createPaymentMethod({
+        type: 'card',
+        card: this.cardElement,
+        billing_details: { name: this.donation.card_holder_name || undefined },
+      });
+      if (result.error) {
+        this.cardError = result.error.message;
+        this.submitMessage = 'Card validation failed: ' + result.error.message;
+        this.submitOk = false;
+        return false;
+      }
+      const pm_id = result.paymentMethod.id;
+      const resp = await fetch(this.config.chargeUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.config.csrfToken },
+        body: JSON.stringify({
+          donation_id: donationId,
+          stripe_payment_method_id: pm_id,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!data.success) {
+        this.submitMessage = 'Charge failed: ' + (data.error || data.message || 'unknown error');
+        this.submitOk = false;
+        return false;
+      }
+      if (data.awaiting_authentication) {
+        this.submitMessage = 'Card requires 3DS authentication — recovery link will be emailed to the donor.';
+        this.submitOk = true;
+        return true;
+      }
+      if (data.auto_approved) {
+        this.submitMessage =
+          'Charged £' + (this.donation.amount || '') + ' — auto-approved.';
+      } else if (data.payment_status === 'requires_capture') {
+        this.submitMessage =
+          'Card authorised — funds settle when QA approves the donation.';
+      } else if (data.payment_status === 'completed') {
+        this.submitMessage = 'Charged £' + (this.donation.amount || '') + '.';
+      } else {
+        this.submitMessage = 'Card processed (status: ' + data.payment_status + ').';
+      }
+      this.submitOk = true;
+      // Surface a same-session refund button only when funds actually moved.
+      // requires_capture and awaiting_authentication aren't refundable yet.
+      if (data.payment_status === 'completed' && data.donation_id) {
+        this.lastChargedDonation = {
+          id: data.donation_id,
+          amount: this.donation.amount,
+        };
+      }
+      return true;
+    },
+
+    async refundLastDonation() {
+      if (!this.lastChargedDonation || this.refundInFlight) return;
+      const reason = window.prompt(
+        'Optional reason for the refund (logged on the donation):',
+        ''
+      );
+      if (reason === null) return;  // operator cancelled
+      this.refundInFlight = true;
+      try {
+        const resp = await fetch(this.config.refundUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.config.csrfToken,
+          },
+          body: JSON.stringify({
+            donation_id: this.lastChargedDonation.id,
+            reason: reason,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) {
+          this.submitMessage = 'Refund failed: ' + (data.error || 'unknown error');
+          this.submitOk = false;
+          return;
+        }
+        this.submitMessage =
+          'Refund issued for £' + this.lastChargedDonation.amount + '. Donation moved back to QA.';
+        this.submitOk = true;
+        this.lastChargedDonation = null;
+      } finally {
+        this.refundInFlight = false;
+      }
+    },
+
+    resetForNextCall() {
+      this.selectedDonor = null;
+      this.donation.amount = '';
+      this.donation.payment_method = '';
+      this.donation.gift_aid = false;
+      this.donation.donation_frequency = '';
+      this.donation.cheque_number = '';
+      this.donation.cheque_date = '';
+      this.donation.caf_voucher_number = '';
+      this.donation.caf_amount = '';
+      this.donation.sort_code = '';
+      this.donation.account_number = '';
+      this.donation.direct_debit_start_date = '';
+      this.donation.card_holder_name = '';
+      this.donation.non_financial_reason = '';
+      this.donation.non_financial_notes = '';
+      this.ddVerbatimRead = false;
+      this.bacsOverride = false;
+      this.resetDonorEdits();
+      this.donorEditsHydratedFor = null;
+      this.donorEditExpanded = false;
+      // Reset card element so next card capture is clean.
+      if (this.cardElement) {
+        this.cardElement.clear();
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

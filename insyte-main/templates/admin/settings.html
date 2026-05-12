@@ -1,0 +1,472 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6" x-data="{ activeTab: '{{ active_tab|default:'invoice' }}' }">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Settings</h1>
+      <p class="mt-1 text-sm text-gray-500">Manage system configuration and default settings.</p>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="border-b border-gray-200">
+    <nav class="-mb-px flex space-x-8" aria-label="Settings tabs">
+      <button @click="activeTab = 'invoice'"
+              :class="activeTab === 'invoice' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+              class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        Invoice Settings
+      </button>
+      <button @click="activeTab = 'company'"
+              :class="activeTab === 'company' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+              class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+        </svg>
+        Company Details
+      </button>
+      <button @click="activeTab = 'general'"
+              :class="activeTab === 'general' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+              class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
+        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+        General Settings
+      </button>
+    </nav>
+  </div>
+
+  <form method="POST" action="{% url 'custom_admin:admin_settings' %}">
+    {% csrf_token %}
+    <input type="hidden" name="active_tab" x-bind:value="activeTab">
+    
+    <!-- Invoice Settings Tab -->
+    <div x-show="activeTab === 'invoice'" x-cloak class="space-y-6">
+      <!-- Service Line Items Management -->
+      <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg overflow-hidden">
+        <div class="px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div class="flex-1">
+              <h3 class="text-xl font-bold text-white flex items-center">
+                <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                </svg>
+                Service Line Items Management
+              </h3>
+              <p class="text-blue-100 mt-2 text-sm">
+                Manage comprehensive service categories and line items for invoice generation. 
+                Configure 43 categories with 182+ pre-defined services including Set Ups, Data Capture, 
+                Print Services, Raffle Processing, and more.
+              </p>
+              <div class="flex gap-3 mt-4 text-sm text-blue-100">
+                <span class="flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                  </svg>
+                  Hierarchical organization
+                </span>
+                <span class="flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                  </svg>
+                  Custom pricing units
+                </span>
+                <span class="flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                  </svg>
+                  Default selections
+                </span>
+              </div>
+            </div>
+            <div class="ml-6">
+              <a href="{% url 'custom_admin:admin_service_settings' %}" 
+                 class="inline-flex items-center px-6 py-3 bg-white text-blue-600 font-semibold rounded-lg hover:bg-blue-50 transition-colors shadow-md">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Manage Services
+                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pricing per Metric -->
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-blue-50">
+          <h3 class="text-lg font-medium text-blue-900">Default Pricing per Metric (Legacy)</h3>
+          <p class="text-sm text-blue-600 mt-1">Set default prices for each service metric used in invoice calculations. <strong>Note:</strong> Use the new Service Line Items Management above for comprehensive service pricing.</p>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <!-- Donations -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Donation</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_donation" step="0.0001" 
+                     value="{{ settings.price_per_donation }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Gift Aid -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Gift Aid</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_gift_aid" step="0.0001"
+                     value="{{ settings.price_per_gift_aid }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Letters -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Letter</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_letter" step="0.0001"
+                     value="{{ settings.price_per_letter }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Campaigns -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Campaign</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_campaign" step="0.0001"
+                     value="{{ settings.price_per_campaign }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- HGV -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per HGV Identified</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_hgv" step="0.0001"
+                     value="{{ settings.price_per_hgv }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- LGV -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per LGV Identified</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_lgv" step="0.0001"
+                     value="{{ settings.price_per_lgv }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Donor Response -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Donor Response</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_donor_response" step="0.0001"
+                     value="{{ settings.price_per_donor_response }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Notification -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Notification</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_notification" step="0.0001"
+                     value="{{ settings.price_per_notification }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Data File -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Data File</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_data_file" step="0.0001"
+                     value="{{ settings.price_per_data_file }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Batch -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Batch</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_batch" step="0.0001"
+                     value="{{ settings.price_per_batch }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Report -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Report</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_report" step="0.0001"
+                     value="{{ settings.price_per_report }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Template -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Template</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_template" step="0.0001"
+                     value="{{ settings.price_per_template }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- User -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per User</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_user" step="0.0001"
+                     value="{{ settings.price_per_user }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Donor Added -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Donor Added</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_donor_added" step="0.0001"
+                     value="{{ settings.price_per_donor_added }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Donor Updated -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per Donor Updated</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_donor_updated" step="0.0001"
+                     value="{{ settings.price_per_donor_updated }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- API Call -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per API Call</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_api_call" step="0.0001"
+                     value="{{ settings.price_per_api_call }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+          
+          <!-- Storage -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Price per MB Storage</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">£</span>
+              </div>
+              <input type="number" name="price_per_mb_storage" step="0.0001"
+                     value="{{ settings.price_per_mb_storage }}"
+                     class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-3 py-2 sm:text-sm border-gray-300 rounded-md">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Default Invoice Settings -->
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-green-50">
+          <h3 class="text-lg font-medium text-green-900">Default Invoice Settings</h3>
+          <p class="text-sm text-green-600 mt-1">Configure default values for new invoices.</p>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Default Tax Rate (%)</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input type="number" name="default_tax_rate" step="0.01" max="100" min="0"
+                     value="{{ settings.default_tax_rate }}"
+                     class="focus:ring-green-500 focus:border-green-500 block w-full pr-12 py-2 sm:text-sm border-gray-300 rounded-md">
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">%</span>
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">VAT rate applied to invoices (UK standard is 20%)</p>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Default Payment Due Days</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input type="number" name="default_due_days" step="1" min="1" max="365"
+                     value="{{ settings.default_due_days }}"
+                     class="focus:ring-green-500 focus:border-green-500 block w-full pr-12 py-2 sm:text-sm border-gray-300 rounded-md">
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span class="text-gray-500 sm:text-sm">days</span>
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">Days until invoice payment is due from issue date</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Company Details Tab -->
+    <div x-show="activeTab === 'company'" x-cloak class="space-y-6">
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-purple-50">
+          <h3 class="text-lg font-medium text-purple-900">Company Information</h3>
+          <p class="text-sm text-purple-600 mt-1">Details shown on invoices and official documents.</p>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Company Name</label>
+            <input type="text" name="company_name" value="{{ settings.company_name }}"
+                   class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700">VAT Number</label>
+            <input type="text" name="company_vat_number" value="{{ settings.company_vat_number }}"
+                   placeholder="GB 123 4567 89"
+                   class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">
+          </div>
+          
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700">Company Address</label>
+            <textarea name="company_address" rows="3"
+                      class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">{{ settings.company_address }}</textarea>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Phone Number</label>
+            <input type="tel" name="company_phone" value="{{ settings.company_phone }}"
+                   placeholder="+44 20 1234 5678"
+                   class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Email Address</label>
+            <input type="email" name="company_email" value="{{ settings.company_email }}"
+                   placeholder="billing@company.com"
+                   class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">
+          </div>
+          
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700">Company Logo URL</label>
+            <input type="url" name="company_logo_url" value="{{ settings.company_logo_url }}"
+                   placeholder="https://example.com/logo.png"
+                   class="mt-1 focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md">
+            <p class="mt-1 text-xs text-gray-500">Full URL to your company logo (recommended: 200x60 pixels, PNG or SVG)</p>
+          </div>
+          
+          {% if settings.company_logo_url %}
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Logo Preview</label>
+            <div class="p-4 bg-gray-100 rounded-lg inline-block">
+              <img src="{{ settings.company_logo_url }}" alt="Company Logo" class="max-h-16" onerror="this.style.display='none'">
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <!-- General Settings Tab -->
+    <div x-show="activeTab === 'general'" x-cloak class="space-y-6">
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <h3 class="text-lg font-medium text-gray-900">General System Settings</h3>
+          <p class="text-sm text-gray-500 mt-1">Configure general application settings.</p>
+        </div>
+        <div class="p-6">
+          <div class="text-center py-8 text-gray-500">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            <p class="mt-2">General settings will be available in a future update.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Submit Button -->
+    <div class="flex justify-end pt-6 border-t border-gray-200">
+      <button type="submit" 
+              class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        Save Settings
+      </button>
+    </div>
+  </form>
+  
+  {% if settings.updated_at %}
+  <div class="text-right text-xs text-gray-400">
+    Last updated: {{ settings.updated_at|date:"d M Y H:i" }}
+    {% if settings.updated_by %}by {{ settings.updated_by.get_full_name|default:settings.updated_by.username }}{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

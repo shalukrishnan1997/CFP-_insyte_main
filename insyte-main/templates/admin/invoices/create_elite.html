@@ -1,0 +1,810 @@
+{% extends "layouts/admin_layout.html" %}
+
+{% block title %}Create Invoice with Services{% endblock %}
+
+{% block extra_head %}
+<!-- Flatpickr CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Create Invoice with Services</h1>
+                <p class="mt-2 text-sm text-gray-600">
+                    Select services from available categories and generate an invoice
+                </p>
+            </div>
+            <a href="{% url 'custom_admin:invoice_list' %}" 
+               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                ← Back to List
+            </a>
+        </div>
+    </div>
+
+    <form method="POST" id="invoiceForm" onsubmit="return handleSubmit(event)">
+        {% csrf_token %}
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column: Form Fields and Services (2/3) -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Client & Period Information -->
+                <div class="workspace-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Invoice Details</h2>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Client <span class="text-red-500">*</span>
+                                </label>
+                                <select name="client_id" id="clientSelect" required 
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        onchange="loadCampaigns(); loadMetrics();">
+                                    <option value="">Select a client...</option>
+                                    {% for client in clients %}
+                                    <option value="{{ client.id }}">{{ client.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Campaign <span class="text-red-500">*</span>
+                                </label>
+                                <select name="campaign_id" id="campaignSelect" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        onchange="loadMetrics();">
+                                    <option value="">Select a campaign...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Billing Period Start <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" name="billing_period_start" id="startDate" required
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                       onchange="loadMetrics();">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Billing Period End <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" name="billing_period_end" id="endDate" required
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                       onchange="loadMetrics();">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automated Metrics -->
+                <div class="workspace-panel p-6" id="metricsCard" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+                        Automated Metrics
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">These metrics are automatically calculated for the selected period</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="metricsContent">
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">Donations</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricDonations">0</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">Gift Aid</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricGiftAid">0</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">Letters</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricLetters">0</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">Campaigns</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricCampaigns">0</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">HGV</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricHGV">0</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                            <p class="text-gray-600 text-sm font-medium">LGV</p>
+                            <p class="text-2xl font-bold text-gray-900 mt-1" id="metricLGV">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Categories -->
+                <div class="workspace-panel p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-900">
+                            <i class="fas fa-list-check mr-2 text-blue-600"></i>
+                            Select Services
+                        </h2>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="expandAll()" class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                                <i class="fas fa-expand-alt mr-1"></i>Expand All
+                            </button>
+                            <button type="button" onclick="collapseAll()" class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                                <i class="fas fa-compress-alt mr-1"></i>Collapse All
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="servicesLoading" class="text-center py-12">
+                        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                        <p class="text-gray-600 mt-4">Loading services...</p>
+                    </div>
+                    
+                    <div id="servicesContainer" class="space-y-3" style="display: none;"></div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="workspace-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">Additional Information</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Internal Notes</label>
+                            <textarea name="notes" rows="3"
+                                      class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      placeholder="Add any internal notes about this invoice..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Terms & Conditions</label>
+                            <textarea name="terms_and_conditions" rows="3"
+                                      class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      placeholder="Enter terms and conditions for the client...">{{ settings.company_name }} payment terms: Payment due within {{ settings.default_due_days }} days of invoice date.</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Summary (1/3) -->
+            <div class="lg:col-span-1">
+                <div class="workspace-panel p-6 sticky top-4">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">
+                        <i class="fas fa-calculator mr-2 text-blue-600"></i>
+                        Invoice Summary
+                    </h2>
+                    
+                    <!-- Services Selected -->
+                    <div class="bg-blue-50 rounded-md p-4 mb-4 border border-blue-200">
+                        <p class="text-blue-700 text-sm font-medium">Services Selected</p>
+                        <p class="text-3xl font-bold text-blue-900 mt-1" id="selectedCount">0</p>
+                    </div>
+
+                    <!-- Pricing Breakdown -->
+                    <div class="space-y-3 mb-4">
+                        <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                            <span class="text-gray-600">Subtotal:</span>
+                            <span class="text-lg font-bold text-gray-900" id="subtotalAmount">£0.00</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-600">Tax Rate:</span>
+                                <input type="number" name="tax_rate" id="taxRate" value="{{ settings.default_tax_rate }}" step="0.01"
+                                       class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
+                                       onchange="updateSummary();">
+                                <span class="text-gray-600">%</span>
+                            </div>
+                            <span class="text-lg font-semibold text-gray-900" id="taxAmount">£0.00</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center py-3 border-t-2 border-gray-300">
+                            <span class="text-lg font-bold text-gray-900">Grand Total:</span>
+                            <span class="text-2xl font-bold text-blue-600" id="grandTotal">£0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Terms -->
+                    <div class="bg-gray-50 rounded-md p-4 mb-4 border border-gray-200">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Payment Due In (days):</label>
+                        <input type="number" name="due_days" value="{{ settings.default_due_days }}"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-md text-center font-semibold">
+                    </div>
+
+                    <!-- Create Button -->
+                    <button type="submit" 
+                            class="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-lg">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Create Invoice
+                    </button>
+
+                    <!-- Quick Stats -->
+                    <div class="mt-6 pt-4 border-t border-gray-200">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Quick Stats</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Categories:</span>
+                                <span class="font-semibold text-gray-900" id="categoryCount">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Available Services:</span>
+                                <span class="font-semibold text-gray-900" id="availableServices">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Selection Rate:</span>
+                                <span class="font-semibold text-gray-900" id="selectionRate">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden field for selected services JSON -->
+        <input type="hidden" name="selected_services" id="selectedServicesInput">
+    </form>
+</div>
+
+<script>
+let servicesData = [];
+let selectedServices = new Map();
+const campaignsApiUrl = '{% url "custom_admin:campaigns_by_client_api" %}';
+const serviceItemsApiUrl = '{% url "custom_admin:service_items_api" %}';
+const invoiceMetricsApiUrl = '{% url "custom_admin:invoice_metrics_api" %}';
+
+function setSelectPlaceholder(selectEl, label) {
+  selectEl.replaceChildren();
+  const option = document.createElement('option');
+  option.value = '';
+  option.textContent = label;
+  selectEl.appendChild(option);
+}
+
+// Load campaigns for selected client
+function loadCampaigns() {
+  const clientId = document.getElementById('clientSelect').value;
+  const campaignSelect = document.getElementById('campaignSelect');
+  
+  if (!clientId) {
+    setSelectPlaceholder(campaignSelect, 'Select a campaign...');
+    return;
+  }
+  
+  setSelectPlaceholder(campaignSelect, 'Loading...');
+  
+  const campaignsUrl = new URL(campaignsApiUrl, window.location.origin);
+  campaignsUrl.searchParams.set('client_id', clientId);
+  fetch(campaignsUrl, {
+    credentials: 'same-origin'
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('Campaigns loaded:', data);
+      setSelectPlaceholder(campaignSelect, 'Select a campaign...');
+      const campaigns = data.campaigns || [];
+      if (campaigns.length === 0) {
+        setSelectPlaceholder(campaignSelect, 'No campaigns available for this client');
+        return;
+      }
+      campaigns.forEach(campaign => {
+        const option = document.createElement('option');
+        option.value = campaign.id;
+        const statusBadge = campaign.status !== 'active' ? ` (${campaign.status})` : '';
+        option.textContent = campaign.name + statusBadge;
+        campaignSelect.appendChild(option);
+      });
+    })
+    .catch(error => {
+      console.error('Error loading campaigns:', error);
+      setSelectPlaceholder(campaignSelect, 'Error loading campaigns');
+    });
+}
+
+// Load automated metrics
+function loadMetrics() {
+  const clientId = document.getElementById('clientSelect').value;
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  const campaignId = document.getElementById('campaignSelect').value;
+  
+  if (!clientId || !startDate || !endDate) {
+    document.getElementById('metricsCard').style.display = 'none';
+    return;
+  }
+  
+  const metricsUrl = new URL(invoiceMetricsApiUrl, window.location.origin);
+  metricsUrl.searchParams.set('client_id', clientId);
+  metricsUrl.searchParams.set('start_date', startDate);
+  metricsUrl.searchParams.set('end_date', endDate);
+  if (campaignId) {
+    metricsUrl.searchParams.set('campaign_id', campaignId);
+  }
+  
+  fetch(metricsUrl, { credentials: 'same-origin' })
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('metricDonations').textContent = data.donations || 0;
+      document.getElementById('metricGiftAid').textContent = data.gift_aid || 0;
+      document.getElementById('metricLetters').textContent = data.letters || 0;
+      document.getElementById('metricCampaigns').textContent = data.campaigns || 0;
+      document.getElementById('metricHGV').textContent = data.hgv || 0;
+      document.getElementById('metricLGV').textContent = data.lgv || 0;
+      document.getElementById('metricsCard').style.display = 'block';
+      
+      // Auto-populate service quantities based on metrics
+      autoPopulateServiceQuantities(data);
+    })
+    .catch(error => {
+      console.error('Error loading metrics:', error);
+    });
+}
+
+// Auto-populate service quantities based on calculated metrics
+function autoPopulateServiceQuantities(metrics) {
+  // Map metric names to service descriptions (case-insensitive matching)
+  const metricToServiceMap = {
+    'hgv': /hgv|high.*gift.*value/i,
+    'lgv': /lgv|low.*gift.*value/i,
+    'donations': /donation|capture/i,
+    'gift_aid': /gift.*aid/i,
+    'letters': /letter|thank.*you/i,
+    'campaigns': /campaign/i,
+    'donors_added': /donor.*add/i,
+    'data_files': /data.*file|file.*process/i,
+    'batch_operations': /batch/i,
+  };
+  
+  // Iterate through all services and auto-populate quantities
+  servicesData.forEach(category => {
+    category.service_items.forEach(item => {
+      if (!item.is_active) return;
+      
+      const description = item.description.toLowerCase();
+      
+      // Check each metric mapping
+      for (const [metricKey, pattern] of Object.entries(metricToServiceMap)) {
+        if (pattern.test(description)) {
+          const metricValue = metrics[metricKey] || metrics[metricKey + '_identified'] || 0;
+          
+          if (metricValue > 0) {
+            // Auto-populate quantity
+            const qtyInput = document.querySelector(`input[data-service-id="${item.id}"]`);
+            const checkbox = document.querySelector(`[data-service-id="${item.id}"] .service-checkbox`);
+            
+            if (qtyInput && checkbox) {
+              qtyInput.value = metricValue;
+              checkbox.checked = true;
+              
+              // Update the service in selectedServices map
+              selectedServices.set(item.id, {
+                id: item.id,
+                description: item.description,
+                unit_price: parseFloat(item.unit_price),
+                pricing_unit: item.pricing_unit,
+                quantity: metricValue
+              });
+              
+              // Update the line total display
+              updateLineTotal(item.id);
+              
+              // Add visual selection
+              const row = checkbox.closest('[data-service-id]');
+              if (row) {
+                row.classList.add('bg-blue-50', 'border-blue-300');
+              }
+            }
+          }
+          break; // Only match first pattern
+        }
+      }
+    });
+  });
+}
+
+// Load service categories
+function loadServices() {
+  fetch(serviceItemsApiUrl, { credentials: 'same-origin' })
+    .then(response => response.json())
+    .then(data => {
+      servicesData = data.categories || [];
+      renderServices();
+      document.getElementById('servicesLoading').style.display = 'none';
+      document.getElementById('servicesContainer').style.display = 'block';
+      updateStats();
+    })
+    .catch(error => {
+      console.error('Error loading services:', error);
+      const loading = document.getElementById('servicesLoading');
+      loading.replaceChildren();
+      const msg = document.createElement('p');
+      msg.className = 'text-red-600';
+      msg.textContent = 'Error loading services. Please refresh the page.';
+      loading.appendChild(msg);
+    });
+}
+
+// Render services in category cards
+function renderServices() {
+  const container = document.getElementById('servicesContainer');
+  container.replaceChildren();
+  
+  servicesData.forEach((category, categoryIndex) => {
+    const activeItems = category.service_items.filter(item => item.is_active);
+    if (activeItems.length === 0) return;
+    
+    const categoryCard = document.createElement('div');
+    categoryCard.className = 'border border-gray-200 rounded-md overflow-hidden';
+
+    const header = document.createElement('div');
+    header.className = 'bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 border-b border-gray-200';
+    header.addEventListener('click', () => toggleCategoryCollapse(categoryIndex));
+
+    const headerRow = document.createElement('div');
+    headerRow.className = 'flex items-center justify-between';
+
+    const left = document.createElement('div');
+    left.className = 'flex items-center flex-1';
+    const folderIcon = document.createElement('i');
+    folderIcon.className = 'fas fa-folder text-gray-500 mr-3';
+    const titleWrap = document.createElement('div');
+    const title = document.createElement('h3');
+    title.className = 'font-semibold text-gray-900';
+    title.textContent = category.name || '';
+    titleWrap.appendChild(title);
+    if (category.description) {
+      const desc = document.createElement('p');
+      desc.className = 'text-sm text-gray-600 mt-0.5';
+      desc.textContent = category.description;
+      titleWrap.appendChild(desc);
+    }
+    left.append(folderIcon, titleWrap);
+
+    const right = document.createElement('div');
+    right.className = 'flex items-center gap-3';
+    const badge = document.createElement('span');
+    badge.className = 'px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium';
+    badge.textContent = `${activeItems.length} services`;
+    const chevron = document.createElement('i');
+    chevron.className = `fas fa-chevron-down text-gray-400 transition-transform category-icon-${categoryIndex}`;
+    right.append(badge, chevron);
+
+    headerRow.append(left, right);
+    header.appendChild(headerRow);
+
+    const content = document.createElement('div');
+    content.id = `category-content-${categoryIndex}`;
+    content.className = 'hidden bg-white';
+
+    const contentInner = document.createElement('div');
+    contentInner.className = 'p-4 space-y-2';
+
+    const selectAllRow = document.createElement('div');
+    selectAllRow.className = 'flex items-center pb-2 border-b border-gray-200';
+    const selectAllLabel = document.createElement('label');
+    selectAllLabel.className = 'flex items-center cursor-pointer';
+    const selectAllInput = document.createElement('input');
+    selectAllInput.type = 'checkbox';
+    selectAllInput.className = 'w-4 h-4 text-blue-600 rounded focus:ring-blue-500';
+    selectAllInput.addEventListener('change', () => toggleAllInCategory(categoryIndex, selectAllInput.checked));
+    const selectAllText = document.createElement('span');
+    selectAllText.className = 'ml-2 text-sm font-medium text-gray-700';
+    selectAllText.textContent = 'Select All';
+    selectAllLabel.append(selectAllInput, selectAllText);
+    selectAllRow.appendChild(selectAllLabel);
+    contentInner.appendChild(selectAllRow);
+
+    activeItems.forEach(item => {
+      const serviceId = String(item.id);
+      const row = document.createElement('div');
+      row.className = `flex items-center gap-3 p-3 rounded-md border border-gray-200 hover:bg-gray-50 ${item.is_default ? 'bg-blue-50 border-blue-300' : ''}`;
+      row.dataset.serviceId = serviceId;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = Boolean(item.is_default);
+      checkbox.className = 'w-4 h-4 text-blue-600 rounded focus:ring-blue-500 service-checkbox';
+      checkbox.addEventListener('change', () => toggleService(serviceId, item.description, item.unit_price, item.pricing_unit));
+
+      const main = document.createElement('div');
+      main.className = 'flex-1 min-w-0';
+      const mainTitle = document.createElement('p');
+      mainTitle.className = 'font-medium text-gray-900 text-sm';
+      mainTitle.textContent = item.description || '';
+      main.appendChild(mainTitle);
+      if (item.notes) {
+        const notes = document.createElement('p');
+        notes.className = 'text-xs text-gray-600 mt-0.5';
+        notes.textContent = item.notes;
+        main.appendChild(notes);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'flex items-center gap-3 flex-shrink-0';
+      const unitMeta = document.createElement('div');
+      unitMeta.className = 'text-right';
+      const unitPrice = document.createElement('p');
+      unitPrice.className = 'font-bold text-gray-900';
+      unitPrice.textContent = `£${parseFloat(item.unit_price).toFixed(2)}`;
+      const unitLabel = document.createElement('p');
+      unitLabel.className = 'text-xs text-gray-600';
+      unitLabel.textContent = item.pricing_unit || '';
+      unitMeta.append(unitPrice, unitLabel);
+
+      const qtyWrap = document.createElement('div');
+      qtyWrap.className = 'flex items-center gap-2';
+      const qtyLabel = document.createElement('label');
+      qtyLabel.className = 'text-xs text-gray-600 font-medium';
+      qtyLabel.textContent = 'Qty:';
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'number';
+      qtyInput.min = '0';
+      qtyInput.value = item.is_default ? '1' : '0';
+      qtyInput.className = 'w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-semibold';
+      qtyInput.dataset.serviceId = serviceId;
+      qtyInput.addEventListener('change', () => updateQuantity(serviceId));
+      qtyWrap.append(qtyLabel, qtyInput);
+
+      const totalWrap = document.createElement('div');
+      totalWrap.className = 'text-right w-20';
+      const totalLabel = document.createElement('p');
+      totalLabel.className = 'text-xs text-gray-600';
+      totalLabel.textContent = 'Total';
+      const totalValue = document.createElement('p');
+      totalValue.className = `font-bold text-blue-600 line-total-${serviceId}`;
+      totalValue.textContent = '£0.00';
+      totalWrap.append(totalLabel, totalValue);
+
+      meta.append(unitMeta, qtyWrap, totalWrap);
+      row.append(checkbox, main, meta);
+      contentInner.appendChild(row);
+    });
+
+    content.appendChild(contentInner);
+    categoryCard.append(header, content);
+    
+    container.appendChild(categoryCard);
+    
+    // Initialize default selections
+    activeItems.forEach(item => {
+      if (item.is_default) {
+        selectedServices.set(item.id, {
+          id: item.id,
+          description: item.description,
+          unit_price: parseFloat(item.unit_price),
+          pricing_unit: item.pricing_unit,
+          quantity: 1
+        });
+        // Also update the line total
+        updateLineTotal(item.id);
+      }
+    });
+  });
+  
+  updateSummary();
+}
+
+// Toggle category collapse
+function toggleCategoryCollapse(index) {
+  const content = document.getElementById(`category-content-${index}`);
+  const icon = document.querySelector(`.category-icon-${index}`);
+  
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    content.classList.add('hidden');
+    icon.style.transform = 'rotate(0deg)';
+  }
+}
+
+// Expand all categories
+function expandAll() {
+  document.querySelectorAll('[id^="category-content-"]').forEach(content => {
+    content.classList.remove('hidden');
+  });
+  document.querySelectorAll('[class*="category-icon-"]').forEach(icon => {
+    icon.style.transform = 'rotate(180deg)';
+  });
+}
+
+// Collapse all categories
+function collapseAll() {
+  document.querySelectorAll('[id^="category-content-"]').forEach(content => {
+    content.classList.add('hidden');
+  });
+  document.querySelectorAll('[class*="category-icon-"]').forEach(icon => {
+    icon.style.transform = 'rotate(0deg)';
+  });
+}
+
+// Toggle all services in a category
+function toggleAllInCategory(categoryIndex, checked) {
+  const category = servicesData[categoryIndex];
+  const checkboxes = document.querySelectorAll(`#category-content-${categoryIndex} .service-checkbox`);
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.checked = checked;
+    const serviceId = checkbox.closest('[data-service-id]').dataset.serviceId;
+    const service = category.service_items.find(s => String(s.id) === String(serviceId));
+    if (service) {
+      if (checked) {
+        const qtyInput = checkbox.closest('[data-service-id]').querySelector('input[type="number"]');
+        const qty = parseInt(qtyInput.value) || 1;
+        qtyInput.value = qty;
+        selectedServices.set(serviceId, {
+          id: serviceId,
+          description: service.description,
+          unit_price: parseFloat(service.unit_price),
+          pricing_unit: service.pricing_unit,
+          quantity: qty
+        });
+      } else {
+        selectedServices.delete(serviceId);
+        const qtyInput = checkbox.closest('[data-service-id]').querySelector('input[type="number"]');
+        qtyInput.value = 0;
+      }
+      updateLineTotal(serviceId);
+    }
+  });
+  
+  updateSummary();
+}
+
+// Toggle service selection
+function toggleService(id, description, price, unit) {
+  const checkbox = document.querySelector(`[data-service-id="${id}"] .service-checkbox`);
+  const row = checkbox.closest('[data-service-id]');
+  const qtyInput = row.querySelector('input[type="number"]');
+  
+  if (checkbox.checked) {
+    row.classList.add('bg-blue-50', 'border-blue-300');
+    const qty = parseInt(qtyInput.value) || 1;
+    qtyInput.value = qty;
+    selectedServices.set(id, {
+      id: id,
+      description: description,
+      unit_price: parseFloat(price),
+      pricing_unit: unit,
+      quantity: qty
+    });
+  } else {
+    row.classList.remove('bg-blue-50', 'border-blue-300');
+    qtyInput.value = 0;
+    selectedServices.delete(id);
+  }
+  
+  updateLineTotal(id);
+  updateSummary();
+}
+
+// Update quantity
+function updateQuantity(serviceId) {
+  const qtyInput = document.querySelector(`input[data-service-id="${serviceId}"]`);
+  const qty = parseInt(qtyInput.value) || 0;
+  
+  if (qty > 0 && selectedServices.has(serviceId)) {
+    const service = selectedServices.get(serviceId);
+    service.quantity = qty;
+    selectedServices.set(serviceId, service);
+  } else if (qty === 0) {
+    const checkbox = document.querySelector(`[data-service-id="${serviceId}"] .service-checkbox`);
+    checkbox.checked = false;
+    selectedServices.delete(serviceId);
+  }
+  
+  updateLineTotal(serviceId);
+  updateSummary();
+}
+
+// Update line total
+function updateLineTotal(serviceId) {
+  if (!selectedServices.has(serviceId)) {
+    document.querySelector(`.line-total-${serviceId}`).textContent = '£0.00';
+    return;
+  }
+  
+  const service = selectedServices.get(serviceId);
+  const total = service.unit_price * service.quantity;
+  document.querySelector(`.line-total-${serviceId}`).textContent = `£${total.toFixed(2)}`;
+}
+
+// Update summary
+function updateSummary() {
+  const count = selectedServices.size;
+  let subtotal = 0;
+  
+  selectedServices.forEach(service => {
+    subtotal += service.unit_price * service.quantity;
+  });
+  
+  const taxRate = parseFloat(document.getElementById('taxRate').value) || 0;
+  const tax = (subtotal * taxRate) / 100;
+  const grandTotal = subtotal + tax;
+  
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('subtotalAmount').textContent = `£${subtotal.toFixed(2)}`;
+  document.getElementById('taxAmount').textContent = `£${tax.toFixed(2)}`;
+  document.getElementById('grandTotal').textContent = `£${grandTotal.toFixed(2)}`;
+  
+  updateStats();
+}
+
+// Update stats
+function updateStats() {
+  const totalServices = servicesData.reduce((sum, cat) => 
+    sum + cat.service_items.filter(item => item.is_active).length, 0);
+  const selectionRate = totalServices > 0 ? ((selectedServices.size / totalServices) * 100).toFixed(0) : 0;
+  
+  document.getElementById('categoryCount').textContent = servicesData.length;
+  document.getElementById('availableServices').textContent = totalServices;
+  document.getElementById('selectionRate').textContent = `${selectionRate}%`;
+}
+
+// Handle form submission
+function handleSubmit(event) {
+  event.preventDefault();
+  
+  if (selectedServices.size === 0) {
+    showToast('Please select at least one service.', 'warning');
+    return false;
+  }
+  
+  // Convert selectedServices Map to array
+  const servicesArray = Array.from(selectedServices.values());
+  document.getElementById('selectedServicesInput').value = JSON.stringify(servicesArray);
+  
+  // Submit form
+  event.target.submit();
+  return true;
+}
+
+// Load services on page load
+function initializeCreateElitePage(root = document) {
+  loadServices();
+
+  if (typeof flatpickr !== 'undefined') {
+    const startDateInput = root.querySelector('#startDate');
+    if (startDateInput && startDateInput.dataset.flatpickrInitialized !== 'true') {
+      flatpickr(startDateInput, {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true
+      });
+      startDateInput.dataset.flatpickrInitialized = 'true';
+    }
+
+    const endDateInput = root.querySelector('#endDate');
+    if (endDateInput && endDateInput.dataset.flatpickrInitialized !== 'true') {
+      flatpickr(endDateInput, {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true
+      });
+      endDateInput.dataset.flatpickrInitialized = 'true';
+    }
+  }
+}
+</script>
+
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function handleCreateEliteReady() {
+      initializeCreateElitePage(document);
+    }, { once: true });
+  } else {
+    initializeCreateElitePage(document);
+  }
+</script>
+
+{% endblock %}

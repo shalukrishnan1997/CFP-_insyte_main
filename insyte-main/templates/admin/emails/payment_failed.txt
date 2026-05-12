@@ -1,0 +1,16 @@
+Hello {{ client.name }},
+
+We were unable to process payment for invoice {{ invoice.invoice_number }}.
+
+Invoice summary
+- Amount due: GBP {{ invoice.balance_due|floatformat:2 }}
+- Due date: {{ invoice.due_date|date:"j F Y" }}
+- Billing period: {{ invoice.billing_period_start|date:"j F Y" }} to {{ invoice.billing_period_end|date:"j F Y" }}
+
+Failure details
+{{ error_message|default:"The payment processor did not return a detailed error message." }}
+
+Please review your payment details and try again. If the issue continues, contact support.
+
+Regards,
+INSYTE Donation Management System

@@ -1,0 +1,1155 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+
+{% block title %}Reports - DMS{% endblock %}
+
+{% block extra_head %}
+<!-- Flatpickr CSS for UK Date Picker -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<!-- ApexCharts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.0/dist/apexcharts.min.js"></script>
+<!-- Leaflet Map CSS/JS for UK Regional Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{% static 'js/uk_regions.js' %}"></script>
+<!-- Shared chart utilities: palette, formatters, renderDashboard, initLeafletMap -->
+<script src="{% static 'js/reports_charts.js' %}"></script>
+<script>
+window.initLeafletMap = function(containerId, mapData) {
+  var mapEl = document.getElementById(containerId);
+  if (!mapEl) return;
+  
+  // Clear any existing map first
+  if (window._currentLeafletMap) {
+      window._currentLeafletMap.remove();
+  }
+
+  // Initialize map centered slightly above England
+  var map = L.map(containerId, {
+      zoomControl: false,
+      attributionControl: false
+  }).setView([54.5, -2.5], 5);
+  window._currentLeafletMap = map;
+
+  // Custom pane for the choropleth
+  map.createPane('choropleth');
+  map.getPane('choropleth').style.zIndex = 400;
+
+  // Values handling for color scale
+  var maxVal = 0;
+  for (var k in mapData) { 
+      if (mapData[k] > maxVal) maxVal = mapData[k]; 
+  }
+
+  // Define Elite UI color scale '#DBEAFE' to '#1D4ED8'
+  function getColor(d) {
+      if (!maxVal) return '#F3F4F6';
+      var ratio = d / maxVal;
+      return ratio > 0.8  ? '#1D4ED8' :
+             ratio > 0.6  ? '#3B82F6' :
+             ratio > 0.4  ? '#60A5FA' :
+             ratio > 0.2  ? '#93C5FD' :
+             ratio > 0    ? '#DBEAFE' :
+                            '#F3F4F6';
+  }
+
+  function style(feature) {
+      var regionName = feature.properties.EER13NM;
+      // Match features to our mapData. EER region names basically match NUTS1.
+      var value = mapData[regionName] || 0;
+      return {
+          fillColor: getColor(value),
+          weight: 1,
+          opacity: 1,
+          color: 'white',
+          fillOpacity: 0.85
+      };
+  }
+
+  if (typeof ukRegionsGeoJSON !== 'undefined') {
+      L.geoJson(ukRegionsGeoJSON, {
+          style: style,
+          pane: 'choropleth',
+          onEachFeature: function(feature, layer) {
+              var regionName = feature.properties.EER13NM;
+              var value = mapData[regionName] || 0;
+              layer.bindTooltip("<b>" + regionName + "</b><br/>" + _fmtGBP(value), {
+                  sticky: true,
+                  className: 'bg-white text-gray-900 border-none shadow-[0_2px_8px_rgba(0,0,0,0.12)] rounded-md py-1.5 px-3',
+                  opacity: 1
+              });
+              
+              layer.on({
+                  mouseover: function(e) {
+                      var layer = e.target;
+                      layer.setStyle({
+                          fillOpacity: 1
+                      });
+                      if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                          layer.bringToFront();
+                      }
+                  },
+                  mouseout: function(e) {
+                      // Reset to default style using the geojson layer
+                      geojsonLayer.resetStyle(e.target);
+                  }
+              });
+          }
+      }).addTo(map);
+      // store reference to do resetStyle if needed, wait, we need variable hoisting
+      var geojsonLayer = map.eachLayer(function(l) { 
+         if (l.options && l.options.pane === 'choropleth') return l; 
+      });
+  } else {
+      console.warn("ukRegionsGeoJSON is not defined. Make sure static/js/uk_regions.js is loaded.");
+  }
+};
+</script>
+
+
+{% endblock %}
+
+{% block page_content %}
+<div class="space-y-6" x-data="reportsData()" x-cloak>
+  <!-- Page Header with Elite Count Tags -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="flex items-center gap-4 flex-wrap">
+      <h1 class="text-2xl font-bold text-gray-900">Reports</h1>
+      <!-- Elite Count Tags -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-200">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+            <path fill-rule="evenodd"
+              d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+              clip-rule="evenodd"></path>
+          </svg>
+          {{ report_count }} Report Types
+        </span>
+        {% if report_type %}
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-200">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+              clip-rule="evenodd"></path>
+          </svg>
+          {{ total_records|default:0 }} Records
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Filters Toggle Button -->
+    <div class="flex items-center gap-2">
+      <button type="button" @click="filtersOpen = !filtersOpen"
+        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors"
+        :class="filtersOpen ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+        Filters
+        <svg class="w-4 h-4 transition-transform" :class="filtersOpen && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Report Category & Card Selection Grid ─────────────────────── -->
+  {% if not report_type %}
+  <div class="space-y-5">
+    {% for category in categories %}
+    <div x-data="{ catOpen: true }">
+      <!-- Category header -->
+      <button type="button"
+              @click="catOpen = !catOpen"
+              class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors">
+        <div class="flex items-center gap-2.5">
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg {{ category.color_bg }}">
+            <span class="{{ category.color_icon }}">
+              {% with icon=category.icon %}{% include "admin/reports/partials/_report_icon.html" %}{% endwith %}
+            </span>
+          </span>
+          <span class="text-sm font-semibold text-gray-800">{{ category.label }}</span>
+        </div>
+        <svg class="w-4 h-4 text-gray-400 transition-transform" :class="!catOpen && '-rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      <!-- Report cards for this category -->
+      <div x-show="catOpen" x-collapse
+           class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+        {% for report in category.report_list %}
+        <a href="{% url 'custom_admin:admin_reports' %}?report_type={{ report.key }}"
+           class="block text-left p-4 border rounded-xl transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/30">
+          <div class="flex items-center gap-2.5 mb-2">
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg {{ report.color_bg }} shrink-0">
+              <span class="{{ report.color_icon }}">
+                {% with icon=report.icon %}{% include "admin/reports/partials/_report_icon.html" %}{% endwith %}
+              </span>
+            </span>
+            <span class="text-sm font-semibold text-gray-900 leading-tight">{{ report.short_title }}</span>
+          </div>
+          <p class="text-xs text-gray-500 leading-relaxed">{{ report.description }}</p>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <!-- Active report header — shown when a report is selected via URL ─ -->
+  <div class="flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3.5">
+    <div class="flex items-center gap-3">
+      <a href="{% url 'custom_admin:admin_reports' %}?clear=1"
+         class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        All Reports
+      </a>
+      <span class="text-gray-300">/</span>
+      <div class="flex items-center gap-2">
+        {% for cat in categories %}
+          {% for r in cat.report_list %}
+            {% if r.key == report_type %}
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg {{ r.color_bg }} shrink-0">
+              <span class="{{ r.color_icon }}">
+                {% with icon=r.icon %}{% include "admin/reports/partials/_report_icon.html" %}{% endwith %}
+              </span>
+            </span>
+            <span class="text-sm font-semibold text-gray-900">{{ r.short_title }}</span>
+            <span class="text-xs text-gray-400 hidden sm:inline">{{ r.description }}</span>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+    <!-- Switch report quick-picker -->
+    <div class="relative" x-data="{ switchOpen: false }">
+      <button type="button" @click="switchOpen = !switchOpen"
+              class="inline-flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/>
+        </svg>
+        Switch Report
+      </button>
+      <div x-show="switchOpen" @click.away="switchOpen = false" x-cloak
+           class="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+        <div class="max-h-80 overflow-y-auto">
+          {% for cat in categories %}
+          <div class="px-3 pt-2 pb-1">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ cat.label }}</p>
+          </div>
+          {% for r in cat.report_list %}
+          <a href="{% url 'custom_admin:admin_reports' %}?report_type={{ r.key }}"
+             class="flex items-center gap-2.5 px-3 py-2 text-sm {% if r.key == report_type %}bg-blue-50 text-blue-700 font-medium{% else %}text-gray-700 hover:bg-gray-50{% endif %} transition-colors">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded {{ r.color_bg }} shrink-0">
+              <span class="{{ r.color_icon }}" style="transform:scale(0.75)">
+                {% with icon=r.icon %}{% include "admin/reports/partials/_report_icon.html" %}{% endwith %}
+              </span>
+            </span>
+            {{ r.short_title }}
+          </a>
+          {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <!-- ─────────────────────────────────────────────────────────────── -->
+
+  <!-- Collapsible Filters Panel -->
+  <div id="filter-panel-slot" x-show="filtersOpen" x-collapse x-cloak>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+      <!-- Card Header -->
+      <div class="px-6 py-4 border-b border-gray-200 bg-gray-50/50">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <h2 class="text-base font-semibold text-gray-900">Report Filters</h2>
+            {% if report_type %}
+            <span class="text-sm text-gray-500">{{ report_title }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Controls -->
+      <form method="get" id="reportForm" class="p-6" style="overflow: visible;" hx-indicator="#global-spinner">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Hidden input to store selected report type from Alpine state -->
+          <input type="hidden" name="report_type" id="report_type" x-model="selectedReport">
+
+          <!-- Scope Filter -->
+          <div class="relative">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Report Scope</label>
+            <button @click="scopeDropOpen = !scopeDropOpen" @click.away="scopeDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                  </path>
+                </svg>
+                <span x-text="scopeName"></span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+
+            <div x-show="scopeDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+              x-cloak>
+              <button type="button" @click="selectScope('overall', 'Overall'); scopeDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedScope === 'overall' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="selectedScope === 'overall' ? 'text-blue-600' : 'text-gray-400'"
+                  fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd"></path>
+                </svg>
+                Overall
+              </button>
+              <button type="button" @click="selectScope('client', 'By Client'); scopeDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedScope === 'client' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="selectedScope === 'client' ? 'text-blue-600' : 'text-gray-400'"
+                  fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z">
+                  </path>
+                </svg>
+                By Client
+              </button>
+              <button type="button" @click="selectScope('campaign', 'By Campaign'); scopeDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="selectedScope === 'campaign' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4" :class="selectedScope === 'campaign' ? 'text-blue-600' : 'text-gray-400'"
+                  fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z">
+                  </path>
+                </svg>
+                By Campaign
+              </button>
+            </div>
+
+            <input type="hidden" name="scope" x-model="selectedScope">
+          </div>
+
+          <!-- Date From -->
+          <div>
+            <label for="date_from" class="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+            <input type="text" name="date_from" id="date_from" value="{{ date_from|date:'d/m/Y' }}"
+              placeholder="DD/MM/YYYY"
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uk-date-field">
+          </div>
+
+          <!-- Date To -->
+          <div>
+            <label for="date_to" class="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+            <input type="text" name="date_to" id="date_to" value="{{ date_to|date:'d/m/Y' }}" placeholder="DD/MM/YYYY"
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uk-date-field">
+          </div>
+        </div>
+
+        <!-- Conditional Filters (Client/Campaign) - Compact inline layout -->
+        <div x-show="selectedScope !== 'overall'" x-transition
+          class="flex flex-wrap items-end gap-4 mt-4 pt-4 border-t border-gray-200">
+
+          <!-- Client Filter -->
+          <div x-show="selectedScope === 'client' || selectedScope === 'campaign'" class="relative"
+            style="min-width: 220px; max-width: 320px;">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Client</label>
+            <button @click="clientDropOpen = !clientDropOpen" @click.away="clientDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z">
+                  </path>
+                </svg>
+                <span class="truncate" x-text="selectedClientName">All Clients</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+
+            <div x-show="clientDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button" @click="selectClient('', 'All Clients'); clientDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedClient ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd"></path>
+                </svg>
+                All Clients
+              </button>
+              <template x-for="c in allClients" :key="c.id">
+                <button type="button" @click="selectClient(c.id, c.name); clientDropOpen = false"
+                  class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                  :class="selectedClient === c.id ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                  <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z">
+                    </path>
+                  </svg>
+                  <span x-text="c.name"></span>
+                </button>
+              </template>
+            </div>
+
+            <input type="hidden" name="client" x-model="selectedClient">
+          </div>
+
+          <!-- Campaign Filter -->
+          <div x-show="selectedScope === 'campaign'" class="relative" style="min-width: 220px; max-width: 320px;">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Campaign</label>
+            <button @click="campaignDropOpen = !campaignDropOpen" @click.away="campaignDropOpen = false" type="button"
+              class="inline-flex items-center justify-between gap-2 w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="height: 38px;">
+              <div class="flex items-center gap-2 min-w-0">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z">
+                  </path>
+                </svg>
+                <span class="truncate" x-text="selectedCampaignName">All Campaigns</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+
+            <div x-show="campaignDropOpen" x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute left-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-64 overflow-y-auto"
+              x-cloak>
+              <button type="button" @click="selectCampaign('', 'All Campaigns'); campaignDropOpen = false"
+                class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                :class="!selectedCampaign ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clip-rule="evenodd"></path>
+                </svg>
+                All Campaigns
+              </button>
+              <template x-if="filteredCampaigns.length === 0">
+                <div class="px-4 py-3 text-sm text-gray-500 text-center">
+                  <p>No campaigns found</p>
+                  <p class="text-xs mt-1" x-show="selectedClient">Try selecting a different client</p>
+                </div>
+              </template>
+              <template x-for="camp in filteredCampaigns" :key="camp.id">
+                <button type="button" @click="selectCampaign(camp.id, camp.name); campaignDropOpen = false"
+                  class="flex items-center gap-3 px-4 py-2 text-sm w-full text-left transition-colors"
+                  :class="selectedCampaign === camp.id ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'">
+                  <svg class="w-4 h-4 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z">
+                    </path>
+                  </svg>
+                  <span x-text="camp.name"></span>
+                </button>
+              </template>
+            </div>
+
+            <input type="hidden" name="campaign" x-model="selectedCampaign">
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+          <button type="button" onclick="window.location.href='{% url 'custom_admin:admin_reports' %}?clear=1'"
+            class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            Clear Filters
+          </button>
+          <button type="submit"
+            class="inline-flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+              </path>
+            </svg>
+            Generate Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if report_type %}
+  <!-- Chart Visualization -->
+  {% if has_visualization %}
+  <div id="chart-loader" class="hidden py-12 text-center bg-white rounded-xl border border-gray-200 shadow-sm mb-6">
+    <svg class="animate-spin h-10 w-10 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <p class="text-sm font-medium text-gray-500">Generating Report Visualizations...</p>
+  </div>
+  <div id="dashboard-container" style="display:none;"></div>
+  <div id="single-chart-container" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+    style="display:none;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-gray-900" id="chart-title"></h2>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="downloadChart()"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          PNG
+        </button>
+      </div>
+    </div>
+    <div id="report-chart" style="min-height: 350px;"></div>
+  </div>
+  {% endif %}
+
+  <!-- Report Results -->
+  <div class="bg-white rounded-lg shadow">
+    <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">{{ report_title }}</h2>
+        <p class="text-sm text-gray-500">{{ report_description }}</p>
+      </div>
+      <div class="flex items-center space-x-2">
+        <!-- Export Buttons -->
+        <a href="{% url 'custom_admin:report_export' %}?report_type={{ report_type }}&scope={{ scope }}&date_from={{ date_from }}&date_to={{ date_to }}{% if client_id %}&client={{ client_id }}{% endif %}{% if campaign_id %}&campaign={{ campaign_id }}{% endif %}&format=csv"
+          hx-boost="false"
+          class="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
+          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
+          </svg>
+          CSV
+        </a>
+        <a href="{% url 'custom_admin:report_export' %}?report_type={{ report_type }}&scope={{ scope }}&date_from={{ date_from }}&date_to={{ date_to }}{% if client_id %}&client={{ client_id }}{% endif %}{% if campaign_id %}&campaign={{ campaign_id }}{% endif %}&format=excel"
+          hx-boost="false"
+          class="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
+          </svg>
+          Excel
+        </a>
+        {% if scans_zip_supported %}
+        <a href="{% url 'custom_admin:report_scans_zip' %}?report_type={{ report_type }}&scope={{ scope }}&date_from={{ date_from }}&date_to={{ date_to }}{% if client_id %}&client={{ client_id }}{% endif %}{% if campaign_id %}&campaign={{ campaign_id }}{% endif %}"
+          hx-boost="false"
+          title="Download a ZIP of redacted, QA-approved donor scans for this report's filters."
+          class="inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors">
+          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M10 12h4">
+            </path>
+          </svg>
+          Scans ZIP
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 border-b border-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            {% for header in table_headers %}
+            <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider bg-[#F9FAFB] border-b border-gray-200">{{ header }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-100">
+          {% for row in report_data %}
+          <tr class="hover:bg-blue-50/50 even:bg-gray-50/50 odd:bg-white transition-colors">
+            {% for cell in row %}
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 
+                {% if '£' in cell|stringformat:'s' and cell|length > 6 %} font-semibold text-green-700 bg-green-50/30 {% endif %}">
+                {{ cell }}
+            </td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="{{ table_headers|length }}" class="px-6 py-12 text-center text-gray-500">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 class="mt-2 text-sm font-medium text-gray-900">No data found</h3>
+              <p class="mt-1 text-sm text-gray-500">Try adjusting your filters or date range.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if report_data %}
+    <!-- Pagination -->
+    <div class="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="text-sm text-gray-500">
+        Showing <span class="font-medium">{{ page_start }}</span> to <span class="font-medium">{{ page_end }}</span> of
+        <span class="font-medium">{{ total_records }}</span> results
+      </div>
+      <div class="flex items-center space-x-2">
+        <!-- Per Page -->
+        <select name="per_page" id="per_page" onchange="updatePerPage(this.value)"
+          class="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-blue-500 focus:border-blue-500">
+          <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+        <span class="text-sm text-gray-500">per page</span>
+
+        <!-- Pagination Links -->
+        {% if has_previous %}
+        <a href="?{{ pagination_query }}&page={{ previous_page }}"
+          class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm">Previous</a>
+        {% endif %}
+
+        <span class="px-3 py-1 bg-blue-600 text-white rounded text-sm">{{ current_page }}</span>
+
+        {% if has_next %}
+        <a href="?{{ pagination_query }}&page={{ next_page }}"
+          class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+
+<!-- Flatpickr JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  (() => {
+    function initializeReportDateFields(root = document) {
+      if (typeof flatpickr === 'undefined') {
+        return;
+      }
+
+      const dateFields = root.querySelectorAll('.uk-date-field');
+      dateFields.forEach(function (input) {
+        if (input.dataset.flatpickrInitialized === 'true') {
+          return;
+        }
+
+        flatpickr(input, {
+          dateFormat: "d/m/Y",
+          allowInput: true,
+          locale: {
+            firstDayOfWeek: 1
+          },
+          onChange: function (_selectedDates, dateStr) {
+            if (dateStr) {
+              input.setCustomValidity('');
+            }
+          },
+          onClose: function (_selectedDates, dateStr) {
+            if (dateStr && !/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+              input.setCustomValidity('Please use DD/MM/YYYY format.');
+              input.reportValidity();
+            } else {
+              input.setCustomValidity('');
+            }
+          }
+        });
+
+        input.dataset.flatpickrInitialized = 'true';
+      });
+    }
+
+    if (!window.__reportsDateFieldInitBound) {
+      document.body.addEventListener('htmx:load', function (event) {
+        initializeReportDateFields(event.target);
+      });
+      window.__reportsDateFieldInitBound = true;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function handleReportsReady() {
+        initializeReportDateFields(document);
+      }, { once: true });
+    } else {
+      initializeReportDateFields(document);
+    }
+  })();
+</script>
+
+<!-- ApexCharts Rendering -->
+{% if report_type and has_visualization %}
+<script>
+  var _reportChart = null;
+
+  // Fallback globals — reports-charts.js is loaded in <head>, but hx-boost navigation
+  // can cause a race where the head script hasn't executed yet when the body is swapped in.
+  var _palette = window._palette || ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#F97316','#14B8A6','#6366F1','#D946EF','#84CC16'];
+  var _fmtGBP = window._fmtGBP || function(v){return '\xA3'+Number(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var _fmtGBPShort = window._fmtGBPShort || function(v){return '\xA3'+Number(v).toLocaleString('en-GB');};
+  var _fmtPct = window._fmtPct || function(v){return (+v).toFixed(1)+'%';};
+  if (!window._dashboardCharts) { window._dashboardCharts = []; }
+
+  function _toFiniteNumber(value) {
+    var numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+  }
+
+  function _normalizeSeries(rawSeries, type) {
+    if (!Array.isArray(rawSeries)) return [];
+    if (type === 'donut' || type === 'pie') {
+      return rawSeries.map(_toFiniteNumber);
+    }
+    return rawSeries.map(function (seriesItem) {
+      if (!seriesItem || typeof seriesItem !== 'object') {
+        return seriesItem;
+      }
+      if (!Array.isArray(seriesItem.data)) {
+        return seriesItem;
+      }
+      return Object.assign({}, seriesItem, {
+        data: seriesItem.data.map(_toFiniteNumber)
+      });
+    });
+  }
+
+  function _safeHorizontalHeight(categories, baseHeight, rowHeight) {
+    var count = Array.isArray(categories) ? categories.length : 0;
+    return Math.max(baseHeight, Math.max(1, count) * rowHeight);
+  }
+
+  function _normalizeChartPayload(rawPayload) {
+    if (!rawPayload || typeof rawPayload !== 'object') {
+      return null;
+    }
+    var normalized = Object.assign({}, rawPayload);
+    normalized.series = _normalizeSeries(rawPayload.series, rawPayload.type);
+    if (Array.isArray(rawPayload.categories)) {
+      normalized.categories = rawPayload.categories.filter(function (category) {
+        return category !== null && category !== undefined;
+      });
+    }
+    if (Array.isArray(rawPayload.labels)) {
+      normalized.labels = rawPayload.labels.filter(function (label) {
+        return label !== null && label !== undefined;
+      });
+    }
+    return normalized;
+  }
+
+  /* ─── Build ApexCharts options for a single (non-dashboard) chart ─── */
+  /* _palette, _fmtGBP, _fmtGBPShort, _fmtPct are provided by reports-charts.js */
+  function _widgetOptions(w) {
+    var opts = {};
+    switch (w.type) {
+      case 'donut':
+        opts = {
+          chart: { type: 'donut', height: 320 },
+          series: w.series, labels: w.labels, colors: _palette,
+          legend: { position: 'bottom', fontSize: '12px' },
+          plotOptions: { pie: { donut: { size: '62%', labels: { show: true, total: { show: true, label: 'Total', formatter: function (x) { return _fmtGBP(x.globals.seriesTotals.reduce(function (a, b) { return a + b }, 0)); } } } } } },
+          dataLabels: { enabled: true, formatter: _fmtPct },
+          tooltip: { y: { formatter: _fmtGBP } },
+          responsive: [{ breakpoint: 640, options: { legend: { position: 'bottom' } } }]
+        };
+        break;
+      case 'pie':
+        opts = {
+          chart: { type: 'pie', height: 320 },
+          series: w.series, labels: w.labels, colors: _palette,
+          legend: { position: 'bottom', fontSize: '12px' },
+          dataLabels: { enabled: true, formatter: _fmtPct },
+          tooltip: { y: { formatter: _fmtGBP } },
+          responsive: [{ breakpoint: 640, options: { legend: { position: 'bottom' } } }]
+        };
+        break;
+      case 'line':
+      case 'area':
+        opts = {
+          chart: { type: w.type === 'line' ? 'line' : 'area', height: 320, toolbar: { show: false }, zoom: { enabled: true } },
+          series: w.series, xaxis: { categories: w.categories, labels: { rotate: -45, style: { fontSize: '10px' } } },
+          colors: ['#3B82F6', '#10B981', '#F59E0B'], stroke: { curve: 'smooth', width: 2 },
+          fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05 } },
+          dataLabels: { enabled: false },
+          yaxis: [
+            { title: { text: 'Total' }, labels: { formatter: _fmtGBPShort } },
+            { opposite: true, title: { text: 'Secondary' }, labels: { formatter: function (v) { return Math.round(v); } } }
+          ],
+          tooltip: { shared: true }, legend: { position: 'top' }, grid: { borderColor: '#f1f5f9' }
+        };
+        // If only one series, remove the second Y axis
+        if (w.series && w.series.length === 1) {
+          opts.yaxis = { labels: { formatter: _fmtGBPShort } };
+        }
+        break;
+      case 'bar':
+        opts = {
+          chart: { type: 'bar', height: 320, toolbar: { show: false } },
+          series: w.series, xaxis: { categories: w.categories, labels: { rotate: -45, style: { fontSize: '10px' } } },
+          colors: _palette, plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+          dataLabels: { enabled: false },
+          yaxis: { labels: { formatter: _fmtGBPShort } },
+          tooltip: { y: { formatter: _fmtGBP } },
+          grid: { borderColor: '#f1f5f9' }, legend: { position: 'top' }
+        };
+        break;
+      case 'bar_horizontal':
+        opts = {
+          chart: { type: 'bar', height: Math.max(320, (w.categories || []).length * 40), toolbar: { show: false } },
+          series: w.series,
+          xaxis: { labels: { formatter: _fmtGBPShort } },
+          yaxis: { categories: w.categories },
+          colors: _palette, plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
+          dataLabels: { enabled: false },
+          tooltip: { y: { formatter: _fmtGBP } },
+          legend: { position: 'top' }, grid: { borderColor: '#f1f5f9' }
+        };
+        break;
+      case 'bar_stacked':
+        opts = {
+          chart: { type: 'bar', height: 320, stacked: true, toolbar: { show: false } },
+          series: w.series, xaxis: { categories: w.categories, labels: { rotate: -45, style: { fontSize: '10px' } } },
+          colors: _palette,
+          plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+          dataLabels: { enabled: false },
+          yaxis: { labels: { formatter: _fmtGBPShort } },
+          tooltip: { y: { formatter: _fmtGBP } },
+          legend: { position: 'top' }, grid: { borderColor: '#f1f5f9' }
+        };
+        break;
+    }
+    return opts;
+  }
+
+  // renderDashboard is provided by reports-charts.js (window.renderDashboard)
+
+  /* ─── Render a single chart (non-dashboard report types) ─── */
+  function renderReportChart() {
+    var raw = _normalizeChartPayload({{ chart_data_json|safe }});
+  if (!raw || !raw.type) return;
+
+  /* Dashboard mode */
+  if (raw.type === 'dashboard') {
+    document.getElementById('dashboard-container').style.display = '';
+    var sc = document.getElementById('single-chart-container');
+    if (sc) sc.style.display = 'none';
+    renderDashboard(raw);
+    return;
+  }
+
+  /* Single-chart mode */
+  document.getElementById('dashboard-container').style.display = 'none';
+  var sc2 = document.getElementById('single-chart-container');
+  if (sc2) sc2.style.display = '';
+
+  var el = document.getElementById('report-chart');
+  var titleEl = document.getElementById('chart-title');
+  if (!el) return;
+  if (titleEl) titleEl.textContent = raw.title || '';
+
+  var options = {};
+
+  switch (raw.type) {
+    case 'donut':
+      options = {
+        chart: { type: 'donut', height: 370 },
+        series: raw.series, labels: raw.labels, colors: _palette,
+        legend: { position: 'right', fontSize: '13px' },
+        plotOptions: { pie: { donut: { size: '60%', labels: { show: true, total: { show: true, label: 'Total', formatter: function (w) { return '£' + w.globals.seriesTotals.reduce(function (a, b) { return a + b }, 0).toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } } } } },
+        dataLabels: { enabled: (raw.labels || []).length <= 20, formatter: function (val) { return val.toFixed(1) + '%'; } },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        responsive: [{ breakpoint: 640, options: { legend: { position: 'bottom' } } }]
+      };
+      break;
+
+    case 'pie':
+      options = {
+        chart: { type: 'pie', height: 370 },
+        series: raw.series, labels: raw.labels, colors: _palette,
+        legend: { position: 'right', fontSize: '13px' },
+        dataLabels: { enabled: (raw.labels || []).length <= 20, formatter: function (val) { return val.toFixed(1) + '%'; } },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        responsive: [{ breakpoint: 640, options: { legend: { position: 'bottom' } } }]
+      };
+      break;
+
+    case 'bar':
+      options = {
+        chart: { type: 'bar', height: 370, toolbar: { show: true } },
+        series: raw.series,
+        xaxis: { categories: raw.categories, labels: { rotate: -45, style: { fontSize: '11px' } } },
+        colors: _palette,
+        plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+        dataLabels: { enabled: false },
+        yaxis: { labels: { formatter: function (v) { return '£' + Number(v).toLocaleString('en-GB'); } } },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        grid: { borderColor: '#f1f5f9' }
+      };
+      break;
+
+    case 'bar_horizontal':
+      options = {
+        chart: { type: 'bar', height: _safeHorizontalHeight(raw.categories, 370, 40), toolbar: { show: true } },
+        series: raw.series,
+        xaxis: { labels: { formatter: function (v) { return '£' + Number(v).toLocaleString('en-GB'); } } },
+        yaxis: { categories: raw.categories },
+        colors: ['#3B82F6', '#94A3B8'],
+        plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '55%' } },
+        dataLabels: { enabled: false },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        legend: { position: 'top' },
+        grid: { borderColor: '#f1f5f9' }
+      };
+      break;
+
+    case 'bar_stacked':
+      options = {
+        chart: { type: 'bar', height: 370, stacked: true, toolbar: { show: true } },
+        series: raw.series,
+        xaxis: { categories: raw.categories, labels: { rotate: -45, style: { fontSize: '11px' } } },
+        colors: ['#10B981', '#F59E0B'],
+        plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+        dataLabels: { enabled: false },
+        yaxis: { labels: { formatter: function (v) { return '£' + Number(v).toLocaleString('en-GB'); } } },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        legend: { position: 'top' },
+        grid: { borderColor: '#f1f5f9' }
+      };
+      break;
+
+    case 'area':
+      options = {
+        chart: { type: 'area', height: 370, toolbar: { show: true }, zoom: { enabled: true } },
+        series: raw.series,
+        xaxis: { categories: raw.categories, labels: { rotate: -45, style: { fontSize: '11px' } } },
+        colors: ['#3B82F6', '#10B981'],
+        stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05 } },
+        dataLabels: { enabled: false },
+        yaxis: [
+          { title: { text: 'Amount (£)' }, labels: { formatter: function (v) { return '£' + Number(v).toLocaleString('en-GB'); } } },
+          { opposite: true, title: { text: 'Count' }, labels: { formatter: function (v) { return Math.round(v); } } }
+        ],
+        tooltip: { shared: true },
+        legend: { position: 'top' },
+        grid: { borderColor: '#f1f5f9' }
+      };
+      break;
+
+    case 'line':
+      options = {
+        chart: { type: 'line', height: 370, toolbar: { show: true }, zoom: { enabled: true } },
+        series: raw.series,
+        xaxis: { categories: raw.categories, labels: { rotate: -45, style: { fontSize: '11px' } } },
+        colors: _palette,
+        stroke: { curve: 'smooth', width: 3 },
+        markers: { size: 4 },
+        dataLabels: { enabled: false },
+        yaxis: { labels: { formatter: function (v) { return '£' + Number(v).toLocaleString('en-GB'); } } },
+        tooltip: { y: { formatter: function (v) { return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2 }); } } },
+        grid: { borderColor: '#f1f5f9' }
+      };
+      break;
+
+    default:
+      return;
+  }
+
+  if (_reportChart) { _reportChart.destroy(); }
+  _reportChart = new ApexCharts(el, options);
+  _reportChart.render();
+  }
+
+  function downloadChart() {
+    if (_reportChart) {
+      _reportChart.dataURI().then(function (uri) {
+        var a = document.createElement('a');
+        a.href = uri.imgURI;
+        a.download = 'report-chart.png';
+        a.click();
+      });
+    }
+  }
+
+  function showLoader() { var l = document.getElementById('chart-loader'); if (l) l.classList.remove('hidden'); }
+  function hideLoader() { var l = document.getElementById('chart-loader'); if (l) l.classList.add('hidden'); }
+
+  function renderReportChartWithLoader() {
+    if (!document.getElementById('report-chart')) {
+      return;
+    }
+    showLoader();
+    setTimeout(function () {
+      try {
+        renderReportChart();
+      } catch (e) {
+        console.error('Analysis rendering error:', e);
+      } finally {
+        hideLoader();
+      }
+    }, 100);
+  }
+
+  if (!window._adminReportsChartAfterSettleBound) {
+    document.body.addEventListener('htmx:afterSettle', function () {
+      renderReportChartWithLoader();
+    });
+    window._adminReportsChartAfterSettleBound = true;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderReportChartWithLoader);
+  } else {
+    renderReportChartWithLoader();
+  }
+</script>
+{% endif %}
+
+
+
+<script>
+  // Alpine.js component for reports page - unified state management
+  function reportsData() {
+    const allClients = {{ all_clients_json|safe }};
+    const allCampaigns = {{ all_campaigns_json|safe }};
+    const initialReport = '{{ report_type|default:"" }}';
+    const initialScope = '{{ scope|default:"overall" }}';
+    const initialClient = '{{ client_id|default:"" }}';
+    const initialCampaign = '{{ campaign_id|default:"" }}';
+
+    return {
+      // Data sources
+      allClients: allClients,
+      allCampaignsRaw: allCampaigns,
+
+      // Dropdown open states
+      reportDropOpen: false,
+      scopeDropOpen: false,
+      clientDropOpen: false,
+      campaignDropOpen: false,
+
+      // Filters panel state — open if a report was already selected (e.g. session restore)
+      filtersOpen: !!initialReport,
+
+      // Selected values
+      selectedReport: initialReport,
+      selectedReportName: initialReport ? getReportName(initialReport) : 'Select a Report Type',
+      selectedScope: initialScope,
+      scopeName: getScopeName(initialScope),
+      selectedClient: initialClient,
+      selectedClientName: initialClient ? (allClients.find(c => c.id === initialClient)?.name || 'All Clients') : 'All Clients',
+      selectedCampaign: initialCampaign,
+      selectedCampaignName: initialCampaign ? (allCampaigns.find(c => c.id === initialCampaign)?.name || 'All Campaigns') : 'All Campaigns',
+
+      // Computed: filtered campaigns based on selected client
+      get filteredCampaigns() {
+        if (!this.selectedClient) {
+          return this.allCampaignsRaw;
+        }
+        return this.allCampaignsRaw.filter(c => c.client_id === this.selectedClient);
+      },
+
+      selectReport(type, name) {
+        this.selectedReport = type;
+        this.selectedReportName = name || 'Select a Report Type';
+      },
+
+      selectScope(scope, name) {
+        this.selectedScope = scope;
+        this.scopeName = name;
+        if (scope === 'overall') {
+          this.selectedClient = '';
+          this.selectedClientName = 'All Clients';
+          this.selectedCampaign = '';
+          this.selectedCampaignName = 'All Campaigns';
+        }
+        if (scope === 'client') {
+          this.selectedCampaign = '';
+          this.selectedCampaignName = 'All Campaigns';
+        }
+      },
+
+      selectClient(id, name) {
+        this.selectedClient = id;
+        this.selectedClientName = name;
+        // Reset campaign when client changes
+        this.selectedCampaign = '';
+        this.selectedCampaignName = 'All Campaigns';
+      },
+
+      selectCampaign(id, name) {
+        this.selectedCampaign = id;
+        this.selectedCampaignName = name;
+      }
+    };
+  }
+
+  // Helper function to get report name from type
+  function getReportName(type) {
+    const reportNames = {
+      'donations': 'All Donations',
+      'payment_method': 'Payment Method Report',
+      'credit_card': 'Credit Card Report',
+      'banking': 'Banking Report',
+      'gift_aid': 'Gift Aid Report',
+      'roi': 'Campaign Performance Report',
+      'hgv': 'High Gift Value (HGV) Report',
+      'lgv': 'Low Gift Value (LGV) Report',
+      'campaign_summary': 'Campaign Summary',
+      'paying_in_slips': 'Paying-In Slips Report'
+    };
+    return reportNames[type] || 'Select a Report Type';
+  }
+
+  // Helper function to get scope name
+  function getScopeName(scope) {
+    const scopeNames = {
+      'overall': 'Overall',
+      'client': 'By Client',
+      'campaign': 'By Campaign'
+    };
+    return scopeNames[scope] || 'Overall';
+  }
+
+  // Update per page
+  function updatePerPage(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', value);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+  }
+</script>
+{% endblock %}

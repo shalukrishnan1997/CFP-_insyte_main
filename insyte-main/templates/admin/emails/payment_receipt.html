@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Receipt</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px 0;
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #0f766e, #14b8a6);
+            color: #ffffff;
+            padding: 28px 24px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .header p {
+            margin: 8px 0 0;
+            font-size: 14px;
+            opacity: 0.92;
+        }
+        .content {
+            padding: 28px 24px;
+        }
+        .amount-card {
+            margin: 24px 0;
+            padding: 20px;
+            border-radius: 10px;
+            background-color: #f0fdfa;
+            border: 1px solid #99f6e4;
+            text-align: center;
+        }
+        .amount-card .label {
+            font-size: 13px;
+            color: #0f766e;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .amount-card .value {
+            margin-top: 8px;
+            font-size: 32px;
+            font-weight: 700;
+            color: #115e59;
+        }
+        .details {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        .details td {
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+        .details td:first-child {
+            color: #64748b;
+            width: 42%;
+        }
+        .details td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .note {
+            margin-top: 24px;
+            font-size: 14px;
+            color: #475569;
+        }
+        .footer {
+            padding: 20px 24px;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            font-size: 12px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Payment Received</h1>
+            <p>Receipt for invoice {{ invoice.invoice_number }}</p>
+        </div>
+        <div class="content">
+            <p>Hello {{ client.name }},</p>
+            <p>We have successfully received your payment. The details are below for your records.</p>
+
+            <div class="amount-card">
+                <div class="label">Amount Received</div>
+                <div class="value">GBP {{ payment.amount|floatformat:2 }}</div>
+            </div>
+
+            <table class="details">
+                <tr>
+                    <td>Invoice number</td>
+                    <td>{{ invoice.invoice_number }}</td>
+                </tr>
+                <tr>
+                    <td>Invoice total</td>
+                    <td>GBP {{ invoice.total_amount|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Payment date</td>
+                    <td>{{ invoice.payment_date|date:"j F Y"|default:"Recorded today" }}</td>
+                </tr>
+                <tr>
+                    <td>Payment method</td>
+                    <td>{{ invoice.get_payment_method_display|default:"Credit Card" }}</td>
+                </tr>
+                <tr>
+                    <td>Reference</td>
+                    <td>{{ invoice.payment_reference|default:payment.stripe_payment_intent_id|default:"Not provided" }}</td>
+                </tr>
+                <tr>
+                    <td>Billing period</td>
+                    <td>{{ invoice.billing_period_start|date:"j M Y" }} to {{ invoice.billing_period_end|date:"j M Y" }}</td>
+                </tr>
+            </table>
+
+            <p class="note">If you have any questions about this payment, please contact the INSYTE team using your usual support channel.</p>
+        </div>
+        <div class="footer">
+            This is an automated receipt from INSYTE Donation Management System.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+Hello {{ client.name }},
+
+This email confirms that we have received payment for invoice {{ invoice.invoice_number }}.
+
+Payment summary
+- Amount received: GBP {{ payment.amount|floatformat:2 }}
+- Invoice total: GBP {{ invoice.total_amount|floatformat:2 }}
+- Payment date: {{ invoice.payment_date|date:"j F Y"|default:"Recorded today" }}
+- Payment method: {{ invoice.get_payment_method_display|default:"Credit Card" }}
+- Reference: {{ invoice.payment_reference|default:payment.stripe_payment_intent_id|default:"Not provided" }}
+
+Billing period
+- From: {{ invoice.billing_period_start|date:"j F Y" }}
+- To: {{ invoice.billing_period_end|date:"j F Y" }}
+
+Client
+- {{ client.name }}
+
+If you have any questions about this receipt, please reply to this email.
+
+Regards,
+INSYTE Donation Management System

@@ -1,0 +1,90 @@
+{% if banking_batches %}
+<div class="dense-table-wrap">
+  <table class="dense-table min-w-full divide-y divide-gray-200 text-sm">
+    <thead class="bg-gray-50">
+      <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <th scope="col" class="px-4 py-3">Batch</th>
+        <th scope="col" class="px-4 py-3">Client / campaign</th>
+        <th scope="col" class="px-4 py-3 text-right">Items</th>
+        <th scope="col" class="px-4 py-3 text-right">Amount</th>
+        <th scope="col" class="px-4 py-3"><span class="sr-only">Open</span></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 bg-white">
+      {% for batch in banking_batches %}
+      <tr class="transition-colors hover:bg-slate-50">
+        <td class="align-top">
+          <p class="font-medium text-gray-900">{{ batch.batch_name }}</p>
+          {% if batch.reviewed_at %}
+          <p class="mt-1 text-xs text-gray-500">QA {{ batch.reviewed_at|date:"d/m/Y H:i" }}</p>
+          {% endif %}
+        </td>
+        <td class="align-top">
+          <p class="font-medium text-gray-900">{{ batch.campaign.client.name }}</p>
+          <p class="mt-1 text-xs text-gray-500">{{ batch.campaign.name }}</p>
+        </td>
+        <td class="whitespace-nowrap text-right align-top tabular-nums text-gray-900">
+          {{ batch.unbanked_bankable_count }}
+        </td>
+        <td class="whitespace-nowrap text-right align-top font-semibold tabular-nums text-gray-900">
+          £{{ batch.unbanked_bankable_total|floatformat:2 }}
+        </td>
+        <td class="whitespace-nowrap text-right align-top">
+          <a
+            href="{% url 'custom_admin:daily_banking_batch_detail' batch.pk %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
+            class="dense-button inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+          >
+            Open
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-slate-50 px-4 py-3 text-[13px]">
+  <p class="text-gray-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
+  <div class="flex items-center gap-2">
+    {% if page_obj.has_previous %}
+    <button
+      type="button"
+      class="dense-button rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+      hx-get="{% url 'custom_admin:htmx_banking_batch_queue' %}?page={{ page_obj.previous_page_number }}"
+      hx-target="#banking-batch-queue"
+      hx-swap="innerHTML"
+      hx-include="#banking-filters-form"
+    >
+      Previous
+    </button>
+    {% endif %}
+    {% if page_obj.has_next %}
+    <button
+      type="button"
+      class="dense-button rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+      hx-get="{% url 'custom_admin:htmx_banking_batch_queue' %}?page={{ page_obj.next_page_number }}"
+      hx-target="#banking-batch-queue"
+      hx-swap="innerHTML"
+      hx-include="#banking-filters-form"
+    >
+      Next
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% else %}
+<div class="flex flex-col items-center justify-center px-6 py-12 text-center">
+  <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  </div>
+  <h3 class="mt-4 text-base font-semibold text-gray-900">Nothing in this queue</h3>
+  <p class="mt-2 max-w-sm text-sm leading-relaxed text-gray-500">Widen the date range, clear a filter, or check that batches have approved physical payments not yet on a slip.</p>
+  <a href="{% url 'custom_admin:daily_banking_dashboard' %}" class="dense-button mt-6 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+    Reset filters
+  </a>
+</div>
+{% endif %}

@@ -1,0 +1,742 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load static %}
+{% load admin_tags %}
+
+{% block title %}QA Review Dashboard{% endblock %}
+
+{% block page_content %}
+<div class="space-y-4" x-data="{ filterModalOpen: false, selectedStatus: '{% if status_filter %}{{ status_filter }}{% else %}all{% endif %}' }">
+  <!-- Page Header with Elite Metrics Tags -->
+  <div class="page-header-section flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex items-center gap-4 flex-wrap">
+      <h1 class="text-xl font-semibold text-slate-900">QA Review Dashboard</h1>
+      <!-- Elite Count Tags (matching campaigns page) -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+          </svg>
+          {{ stats.pending_qa|add:stats.in_review }} Total Pending
+        </span>
+        <span class="inline-flex items-center gap-1.5 rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1 text-[11px] font-medium text-yellow-700">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+          </svg>
+          {{ stats.pending_qa }} Pending QA
+        </span>
+        <span class="inline-flex items-center gap-1.5 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+          </svg>
+          {{ stats.approved_today }} Approved Today
+        </span>
+        <span class="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-600">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+          </svg>
+          {{ stats.rejected }} Rejected
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elite Table Card -->
+  <div class="table-container workspace-panel overflow-hidden">
+    <!-- Table Header with Search & Advanced Filters Button -->
+    <div class="filter-controls-section dense-panel-header">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-center gap-3">
+          <h2 class="text-sm font-semibold text-slate-900">Donation Batches</h2>
+          {% if batches %}
+          <span class="text-sm text-gray-500">
+            {{ batches.paginator.count }} batch{{ batches.paginator.count|pluralize:"es" }}
+          </span>
+          {% endif %}
+        </div>
+        
+        <!-- Search and Filter Controls -->
+        <div class="dense-filter-bar">
+          <!-- Search Input -->
+          <form method="get" action="{% url 'custom_admin:qa_dashboard' %}" id="search-form" class="dense-filter-bar">
+            {% if status_filter and status_filter != 'all' %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+            {% if client_filter %}<input type="hidden" name="client" value="{{ client_filter }}">{% endif %}
+            {% if campaign_filter %}<input type="hidden" name="campaign" value="{{ campaign_filter }}">{% endif %}
+            {% if created_by_filter %}<input type="hidden" name="created_by" value="{{ created_by_filter }}">{% endif %}
+            <div class="relative">
+              <input type="text" 
+                     name="search"
+                     id="batch-search" 
+                     placeholder="Search batches..." 
+                     value="{{ search_query }}"
+                     style="margin-bottom: auto; margin-top: auto;"
+                     class="dense-input w-full min-w-0 pl-9 pr-4 lg:w-56">
+              <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+            <button type="submit" class="dense-button rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+              Search
+            </button>
+            {% if search_query %}
+            <a href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}&{% endif %}{% if client_filter %}client={{ client_filter }}&{% endif %}{% if campaign_filter %}campaign={{ campaign_filter }}&{% endif %}{% if created_by_filter %}created_by={{ created_by_filter }}{% endif %}" 
+               class="dense-button rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors">
+              Clear
+            </a>
+            {% endif %}
+          </form>
+
+          <!-- Advanced Filters Button -->
+          <button @click="filterModalOpen = true"
+                  type="button"
+                  class="dense-button inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+            </svg>
+            <span>Filters</span>
+            {% if status_filter and status_filter != 'all' or client_filter or campaign_filter or created_by_filter %}
+            <span class="flex items-center justify-center min-w-5 h-5 px-1.5 bg-blue-600 text-white text-xs font-bold rounded-full">!</span>
+            {% endif %}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Elite Table -->
+    {% if batches %}
+    <div class="dense-table-wrap">
+      <table class="dense-table min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="text-left">
+              Batch Name
+            </th>
+            <th scope="col" class="text-left">
+              Client / Campaign
+            </th>
+            <th scope="col" class="text-left">
+              Created By
+            </th>
+            <th scope="col" class="text-left">
+              Donations
+            </th>
+            <th scope="col" class="text-left">
+              Total Amount
+            </th>
+            <th scope="col" class="text-left">
+              Payment Type
+            </th>
+            <th scope="col" class="text-left">
+              Status
+            </th>
+            <th scope="col" class="text-left">
+              Created
+            </th>
+            <th scope="col" class="w-12"></th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-100">
+          {% for batch in batches %}
+          <tr class="transition-colors hover:bg-slate-50">
+            <td>
+              <a href="{% url 'custom_admin:qa_batch_review' batch.id %}" 
+                 class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                {{ batch.batch_name }}
+              </a>
+            </td>
+            <td>
+              <div class="text-sm text-gray-900 font-medium">{{ batch.campaign.client.name }}</div>
+              <div class="text-xs text-gray-500">{{ batch.campaign.name }}</div>
+            </td>
+            <td class="text-sm text-gray-600">
+              {% if batch.created_by %}
+                {{ batch.created_by.get_full_name|default:batch.created_by.username }}
+              {% else %}
+                <span class="text-gray-400">—</span>
+              {% endif %}
+            </td>
+            <td class="text-sm font-medium text-gray-900">
+              {{ batch.donation_count }}
+            </td>
+            <td class="text-sm font-semibold text-gray-900">
+              £{{ batch.total_amount_sum|floatformat:2 }}
+            </td>
+            <td class="whitespace-nowrap text-sm text-gray-700">
+              {% if batch.default_payment_method == 'card' %}Card
+              {% elif batch.default_payment_method == 'direct_debit' %}Direct Debit
+              {% elif batch.default_payment_method == 'cash' %}Cash
+              {% elif batch.default_payment_method == 'caf' or batch.default_payment_method == 'caf_voucher' %}CAF Voucher
+              {% elif batch.default_payment_method == 'cheque' or batch.default_payment_method == 'postal_cheque' %}Cheque
+              {% elif batch.default_payment_method == 'postal_order' %}Postal Order
+              {% elif batch.default_payment_method == 'non_financial' %}Non Financial
+              {% else %}{{ batch.default_payment_method|replace:"_, "|title }}
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap">
+              {% if batch.status == 'pending_qa' %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3"></circle>
+                  </svg>
+                  Pending QA
+                </span>
+              {% elif batch.status == 'in_review' %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 8 8">
+                    <circle cx="4" cy="4" r="3"></circle>
+                  </svg>
+                  In Review
+                </span>
+              {% elif batch.status == 'approved' %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                  </svg>
+                  Approved
+                </span>
+              {% elif batch.status == 'rejected' %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                  </svg>
+                  Rejected
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-gray-500">
+              {{ batch.created_at|date:"d/m/Y H:i" }}
+            </td>
+            <td class="whitespace-nowrap text-right">
+              <!-- Three-dot dropdown menu -->
+              <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" 
+                        @click.away="open = false"
+                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                  </svg>
+                </button>
+                
+                <div x-show="open" 
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="transform opacity-0 scale-95"
+                     x-transition:enter-end="transform opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="transform opacity-100 scale-100"
+                     x-transition:leave-end="transform opacity-0 scale-95"
+                     class="workspace-dropdown absolute right-0 mt-2 w-48 py-1 z-50"
+                     x-cloak>
+                  
+                  <a href="{% url 'custom_admin:qa_batch_review' batch.id %}" 
+                     class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                    Review Batch
+                  </a>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    {% if batches.has_other_pages %}
+    <div class="border-t border-gray-200 bg-slate-50 px-4 py-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <p class="text-sm text-gray-600">
+            Showing <span class="font-medium text-gray-900">{{ batches.start_index }}</span> to 
+            <span class="font-medium text-gray-900">{{ batches.end_index }}</span> of 
+            <span class="font-medium text-gray-900">{{ batches.paginator.count }}</span> batch{{ batches.paginator.count|pluralize:"es" }}
+          </p>
+        </div>
+        <nav class="flex items-center gap-1" aria-label="Pagination">
+          {% if batches.has_previous %}
+          <a href="?page=1{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if campaign_filter %}&campaign={{ campaign_filter }}{% endif %}{% if created_by_filter %}&created_by={{ created_by_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" 
+             class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+             aria-label="First page">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+            </svg>
+          </a>
+          <a href="?page={{ batches.previous_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if campaign_filter %}&campaign={{ campaign_filter }}{% endif %}{% if created_by_filter %}&created_by={{ created_by_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" 
+             class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+             aria-label="Previous page">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </a>
+          {% endif %}
+          
+          <!-- Page Numbers -->
+          {% for num in batches.paginator.page_range %}
+            {% if num >= batches.number|add:"-2" and num <= batches.number|add:"2" %}
+              {% if num == batches.number %}
+                <span class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md">
+                  {{ num }}
+                </span>
+              {% else %}
+                <a href="?page={{ num }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if campaign_filter %}&campaign={{ campaign_filter }}{% endif %}{% if created_by_filter %}&created_by={{ created_by_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                  {{ num }}
+                </a>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          
+          {% if batches.has_next %}
+          <a href="?page={{ batches.next_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if campaign_filter %}&campaign={{ campaign_filter }}{% endif %}{% if created_by_filter %}&created_by={{ created_by_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" 
+             class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+             aria-label="Next page">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </a>
+          <a href="?page={{ batches.paginator.num_pages }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if client_filter %}&client={{ client_filter }}{% endif %}{% if campaign_filter %}&campaign={{ campaign_filter }}{% endif %}{% if created_by_filter %}&created_by={{ created_by_filter }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}" 
+             class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+             aria-label="Last page">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+            </svg>
+          </a>
+          {% endif %}
+        </nav>
+      </div>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <!-- Empty State -->
+    <div class="px-6 py-16 text-center">
+      <svg class="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <h3 class="mt-4 text-base font-semibold text-gray-900">No batches found</h3>
+      <p class="mt-2 text-sm text-gray-500">
+        {% if status_filter or client_filter or campaign_filter or created_by_filter or search_query %}
+        Try adjusting your filters or search query.
+        {% else %}
+        All batches have been reviewed. Great work!
+        {% endif %}
+      </p>
+      {% if status_filter or client_filter or campaign_filter or created_by_filter or search_query %}
+      <div class="mt-6">
+        <a href="{% url 'custom_admin:qa_dashboard' %}?clear=1" 
+           class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">
+          Clear all filters
+        </a>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Advanced Filters Modal -->
+  <div x-show="filterModalOpen"
+       x-cloak
+       @keydown.escape.window="filterModalOpen = false"
+       class="fixed inset-0 z-50 flex items-center justify-center px-4"
+       aria-labelledby="modal-title"
+       role="dialog"
+       aria-modal="true"
+       tabindex="-1">
+      <!-- Background overlay -->
+      <div x-show="filterModalOpen"
+           x-transition:enter="ease-out duration-300"
+           x-transition:enter-start="opacity-0"
+           x-transition:enter-end="opacity-100"
+           x-transition:leave="ease-in duration-200"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0"
+           class="fixed inset-0 bg-gray-900/60 transition-opacity backdrop-blur-sm"
+           @click="filterModalOpen = false"></div>
+
+      <!-- Modal panel -->
+      <div x-show="filterModalOpen"
+           x-transition:enter="ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+           x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+           x-transition:leave="ease-in duration-200"
+           x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+           x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+           class="workspace-modal relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden text-left z-50">
+        
+        <!-- Modal Header -->
+        <div class="workspace-modal-header">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="rounded-md bg-blue-50 p-2 text-blue-600">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                </svg>
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900" id="modal-title">Advanced Filters</p>
+                <p class="text-sm text-slate-500">Refine your batch search</p>
+              </div>
+            </div>
+            <button @click="filterModalOpen = false"
+                    type="button"
+                    class="rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body -->
+        <form method="get" action="{% url 'custom_admin:qa_dashboard' %}" class="workspace-modal-body">
+          {% if search_query %}<input type="hidden" name="search" value="{{ search_query }}">{% endif %}
+          
+          <div class="space-y-6">
+            <!-- Status Filter -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-900 mb-3">
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Status
+                </span>
+              </label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <!-- All Status -->
+                <label class="relative flex items-center justify-center cursor-pointer group">
+                  <input type="radio" name="status" value="all" 
+                         x-model="selectedStatus"
+                         {% if not status_filter or status_filter == 'all' %}checked{% endif %}
+                         class="sr-only">
+                  <div {% if not status_filter or status_filter == 'all' %}
+                       class="workspace-choice workspace-choice-active"
+                       {% else %}
+                       :class="selectedStatus === 'all' ? 'workspace-choice workspace-choice-active' : 'workspace-choice'"
+                       class="workspace-choice"
+                       {% endif %}>
+                    <svg {% if not status_filter or status_filter == 'all' %}
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors text-blue-600"
+                         {% else %}
+                         :class="selectedStatus === 'all' ? 'text-blue-600' : 'text-gray-500 group-hover:text-blue-500'"
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors"
+                         {% endif %}
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                    </svg>
+                    All Status
+                  </div>
+                </label>
+                
+                <!-- Pending QA -->
+                <label class="relative flex items-center justify-center cursor-pointer group">
+                  <input type="radio" name="status" value="pending_qa"
+                         x-model="selectedStatus"
+                         {% if status_filter == 'pending_qa' %}checked{% endif %}
+                         class="sr-only">
+                  <div {% if status_filter == 'pending_qa' %}
+                       class="workspace-choice workspace-choice-active"
+                       {% else %}
+                       :class="selectedStatus === 'pending_qa' ? 'workspace-choice workspace-choice-active' : 'workspace-choice'"
+                       class="workspace-choice"
+                       {% endif %}>
+                    <svg {% if status_filter == 'pending_qa' %}
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors text-yellow-600"
+                         {% else %}
+                         :class="selectedStatus === 'pending_qa' ? 'text-yellow-600' : 'text-gray-500 group-hover:text-yellow-500'"
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors"
+                         {% endif %}
+                         fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                    </svg>
+                    Pending QA
+                  </div>
+                </label>
+                
+                <!-- In Review -->
+                <label class="relative flex items-center justify-center cursor-pointer group">
+                  <input type="radio" name="status" value="in_review"
+                         x-model="selectedStatus"
+                         {% if status_filter == 'in_review' %}checked{% endif %}
+                         class="sr-only">
+                  <div {% if status_filter == 'in_review' %}
+                       class="workspace-choice workspace-choice-active"
+                       {% else %}
+                       :class="selectedStatus === 'in_review' ? 'workspace-choice workspace-choice-active' : 'workspace-choice'"
+                       class="workspace-choice"
+                       {% endif %}>
+                    <svg {% if status_filter == 'in_review' %}
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors text-blue-600"
+                         {% else %}
+                         :class="selectedStatus === 'in_review' ? 'text-blue-600' : 'text-gray-500 group-hover:text-blue-500'"
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors"
+                         {% endif %}
+                         fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                      <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                    </svg>
+                    In Review
+                  </div>
+                </label>
+                
+                <!-- Approved -->
+                <label class="relative flex items-center justify-center cursor-pointer group">
+                  <input type="radio" name="status" value="approved"
+                         x-model="selectedStatus"
+                         {% if status_filter == 'approved' %}checked{% endif %}
+                         class="sr-only">
+                  <div {% if status_filter == 'approved' %}
+                       class="workspace-choice workspace-choice-active"
+                       {% else %}
+                       :class="selectedStatus === 'approved' ? 'workspace-choice workspace-choice-active' : 'workspace-choice'"
+                       class="workspace-choice"
+                       {% endif %}>
+                    <svg {% if status_filter == 'approved' %}
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors text-green-600"
+                         {% else %}
+                         :class="selectedStatus === 'approved' ? 'text-green-600' : 'text-gray-500 group-hover:text-green-500'"
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors"
+                         {% endif %}
+                         fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    Approved
+                  </div>
+                </label>
+                
+                <!-- Rejected -->
+                <label class="relative flex items-center justify-center cursor-pointer group">
+                  <input type="radio" name="status" value="rejected"
+                         x-model="selectedStatus"
+                         {% if status_filter == 'rejected' %}checked{% endif %}
+                         class="sr-only">
+                  <div {% if status_filter == 'rejected' %}
+                       class="workspace-choice workspace-choice-active"
+                       {% else %}
+                       :class="selectedStatus === 'rejected' ? 'workspace-choice workspace-choice-active' : 'workspace-choice'"
+                       class="workspace-choice"
+                       {% endif %}>
+                    <svg {% if status_filter == 'rejected' %}
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors text-red-600"
+                         {% else %}
+                         :class="selectedStatus === 'rejected' ? 'text-red-600' : 'text-gray-500 group-hover:text-red-500'"
+                         class="w-5 h-5 mx-auto mb-1.5 transition-colors"
+                         {% endif %}
+                         fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                    </svg>
+                    Rejected
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Client & Campaign Filters -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label for="filter-client" class="block text-sm font-semibold text-gray-900 mb-2">
+                  <span class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                    </svg>
+                    Client
+                  </span>
+                </label>
+                <!-- Elite Dropdown for Client -->
+                <div x-data="{ 
+                     open: false, 
+                     value: '{{ client_filter|default:'' }}',
+                     get selectedText() {
+                         if (!this.value) return 'All Clients';
+                         let el = this.$refs.select.querySelector(`option[value='${this.value}']`);
+                         return el ? el.text : 'All Clients';
+                     }
+                 }" class="relative">
+                  <select x-ref="select" name="client" x-model="value" class="hidden">
+                    <option value="">All Clients</option>
+                    {% for client in clients %}
+                    <option value="{{ client.id }}">{{ client.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="button" @click="open = !open" @click.away="open = false"
+                          class="dense-select w-full flex items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    <span x-text="selectedText" class="truncate"></span>
+                    <svg class="w-4 h-4 text-gray-400 shrink-0 ml-2 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div x-show="open" 
+                       x-transition:enter="transition ease-out duration-100"
+                       x-transition:enter-start="transform opacity-0 scale-95"
+                       x-transition:enter-end="transform opacity-100 scale-100"
+                       x-transition:leave="transition ease-in duration-75"
+                       x-transition:leave-start="transform opacity-100 scale-100"
+                       x-transition:leave-end="transform opacity-0 scale-95"
+                       x-cloak 
+                       class="workspace-dropdown absolute z-50 mt-2 max-h-60 w-full overflow-y-auto py-1">
+                    <button type="button" @click="value = ''; open = false" 
+                            class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                            :class="value === '' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                      <span>All Clients</span>
+                      <svg x-show="value === ''" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                    {% for client in clients %}
+                    <button type="button" @click="value = '{{ client.id }}'; open = false" 
+                            class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                            :class="value === '{{ client.id }}' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                      <span class="truncate">{{ client.name }}</span>
+                      <svg x-show="value === '{{ client.id }}'" class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label for="filter-campaign" class="block text-sm font-semibold text-gray-900 mb-2">
+                  <span class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+                      <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                    </svg>
+                    Campaign
+                  </span>
+                </label>
+                <!-- Elite Dropdown for Campaign -->
+                <div x-data="{ 
+                     open: false, 
+                     value: '{{ campaign_filter|default:'' }}',
+                     get selectedText() {
+                         if (!this.value) return 'All Campaigns';
+                         let el = this.$refs.select.querySelector(`option[value='${this.value}']`);
+                         return el ? el.text : 'All Campaigns';
+                     }
+                 }" class="relative">
+                  <select x-ref="select" name="campaign" x-model="value" class="hidden">
+                    <option value="">All Campaigns</option>
+                    {% for campaign in campaigns %}
+                    <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="button" @click="open = !open" @click.away="open = false"
+                          class="dense-select w-full flex items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                    <span x-text="selectedText" class="truncate"></span>
+                    <svg class="w-4 h-4 text-gray-400 shrink-0 ml-2 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div x-show="open" 
+                       x-transition:enter="transition ease-out duration-100"
+                       x-transition:enter-start="transform opacity-0 scale-95"
+                       x-transition:enter-end="transform opacity-100 scale-100"
+                       x-transition:leave="transition ease-in duration-75"
+                       x-transition:leave-start="transform opacity-100 scale-100"
+                       x-transition:leave-end="transform opacity-0 scale-95"
+                       x-cloak 
+                       class="workspace-dropdown absolute z-50 mt-2 max-h-60 w-full overflow-y-auto py-1">
+                    <button type="button" @click="value = ''; open = false" 
+                            class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                            :class="value === '' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                      <span>All Campaigns</span>
+                      <svg x-show="value === ''" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                    {% for campaign in campaigns %}
+                    <button type="button" @click="value = '{{ campaign.id }}'; open = false" 
+                            class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                            :class="value === '{{ campaign.id }}' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                      <span class="truncate">{{ campaign.name }}</span>
+                      <svg x-show="value === '{{ campaign.id }}'" class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Created By Filter -->
+            <div>
+              <label for="filter-created-by" class="block text-sm font-semibold text-gray-900 mb-2">
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                  </svg>
+                  Created By
+                </span>
+              </label>
+              <!-- Elite Dropdown for Created By -->
+              <div x-data="{ 
+                   open: false, 
+                   value: '{{ created_by_filter|default:'' }}',
+                   get selectedText() {
+                       if (!this.value) return 'All Users';
+                       let el = this.$refs.select.querySelector(`option[value='${this.value}']`);
+                       return el ? el.text : 'All Users';
+                   }
+               }" class="relative">
+                <select x-ref="select" name="created_by" x-model="value" class="hidden">
+                  <option value="">All Users</option>
+                  {% for user in creators %}
+                  <option value="{{ user.id }}">{{ user.get_full_name|default:user.username }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" @click="open = !open" @click.away="open = false"
+                        class="dense-select w-full flex items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                  <span x-text="selectedText" class="truncate"></span>
+                  <svg class="w-4 h-4 text-gray-400 shrink-0 ml-2 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                <div x-show="open" 
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="transform opacity-0 scale-95"
+                     x-transition:enter-end="transform opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="transform opacity-100 scale-100"
+                     x-transition:leave-end="transform opacity-0 scale-95"
+                     x-cloak 
+                     class="workspace-dropdown absolute z-50 mt-2 max-h-60 w-full overflow-y-auto py-1">
+                  <button type="button" @click="value = ''; open = false" 
+                          class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                          :class="value === '' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                    <span>All Users</span>
+                    <svg x-show="value === ''" class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  </button>
+                  {% for user in creators %}
+                  <button type="button" @click="value = '{{ user.id }}'; open = false" 
+                          class="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
+                          :class="value === '{{ user.id }}' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50 font-medium'">
+                    <span class="truncate">{{ user.get_full_name|default:user.username }}</span>
+                    <svg x-show="value === '{{ user.id }}'" class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  </button>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-gray-200">
+            <a href="{% url 'custom_admin:qa_dashboard' %}?clear=1" 
+               class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors">
+              Clear All
+            </a>
+            <div class="flex items-center gap-3">
+              <button type="button" @click="filterModalOpen = false"
+                      class="dense-button rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button type="submit"
+                      class="dense-button rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

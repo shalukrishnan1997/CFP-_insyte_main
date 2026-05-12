@@ -1,0 +1,1529 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block body_class %}h-screen overflow-hidden bg-[#f5f5f5] antialiased{% endblock %}
+{% block page_shell_class %}h-full overflow-hidden{% endblock %}
+
+{% block content %}
+  <div class="app-workspace flex h-full overflow-hidden" x-data="{ 
+        sidebarOpen: window.innerWidth >= 1024, 
+        sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+        viewportWidth: window.innerWidth,
+        init() {
+          this.syncViewport();
+          window.addEventListener('resize', () => {
+            this.viewportWidth = window.innerWidth;
+            this.syncViewport();
+          });
+        },
+        syncViewport() {
+          const storedCollapsed = localStorage.getItem('sidebarCollapsed');
+          if (this.viewportWidth >= 1024) {
+            this.sidebarOpen = true;
+            this.sidebarCollapsed = storedCollapsed !== null ? storedCollapsed === 'true' : this.viewportWidth < 1440;
+            document.documentElement.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+            document.documentElement.classList.toggle('sidebar-expanded', !this.sidebarCollapsed);
+          } else {
+            this.sidebarOpen = false;
+          }
+        },
+        toggleSidebar() {
+          if (this.viewportWidth < 1024) {
+            this.sidebarOpen = !this.sidebarOpen;
+            return;
+          }
+          this.sidebarCollapsed = !this.sidebarCollapsed;
+          localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed);
+          document.documentElement.classList.toggle('sidebar-collapsed', this.sidebarCollapsed);
+          document.documentElement.classList.toggle('sidebar-expanded', !this.sidebarCollapsed);
+        }
+      }" x-init="init()">
+    {% csrf_token %}
+
+  <div x-show="sidebarOpen && viewportWidth < 1024" x-cloak
+    class="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px] lg:hidden"
+    @click="sidebarOpen = false"></div>
+
+  <!-- Sidebar - Width controlled by CSS class on html element -->
+  <aside id="sidebar" @click.away="sidebarOpen = false"
+    class="sidebar-container fixed inset-y-0 left-0 z-50 border-r shadow-none lg:static overflow-hidden flex-shrink-0 flex flex-col"
+    :class="{ '-translate-x-full lg:translate-x-0': !sidebarOpen }" aria-label="Sidebar navigation">
+
+    <!-- Logo and Toggle Section - Fixed Height -->
+    <div class="flex items-center justify-between px-4 border-b border-gray-200"
+      style="height: 60px; min-height: 60px;">
+      <div class="logo-container flex items-center space-x-3 min-w-0">
+        <img src="{% static 'images/cfp_lotteryraffles.png' %}" alt="CFP Lottery and Raffles"
+          class="app-logo-img h-12 w-auto max-w-[11rem] object-contain object-left flex-shrink-0" width="176" height="48" />
+      </div>
+
+      <!-- Toggle Button - Visible when sidebar is expanded -->
+      <button @click="toggleSidebar()"
+        class="toggle-expanded flex items-center justify-center p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 flex-shrink-0"
+        aria-label="Collapse sidebar" title="Collapse sidebar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7">
+          </path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Floating Toggle Button (visible when collapsed) -->
+    <div class="toggle-collapsed">
+      <button @click="toggleSidebar()"
+        class="flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 hover:bg-slate-700"
+        aria-label="Expand sidebar" title="Expand sidebar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav flex-1 py-4 space-y-1 px-3" aria-label="Main navigation"
+      style="overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;">
+      <!-- Dashboard - Always visible -->
+      <a href="{% url url_namespace|add:':admin_dashboard' %}"
+        class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'dashboard' or request.resolver_match.url_name == 'admin_dashboard' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+        x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+        @mouseleave="showTooltip = false">
+        <svg
+          class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'dashboard' or request.resolver_match.url_name == 'admin_dashboard' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %} transition-colors duration-200"
+          fill="currentColor" viewBox="0 0 20 20">
+          <path
+            d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z">
+          </path>
+        </svg>
+        <span class="nav-text">Dashboard</span>
+        <!-- Tooltip for collapsed state -->
+        <div x-show="showTooltip && sidebarCollapsed" x-cloak x-transition:enter="transition ease-out duration-100"
+          x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+          class="absolute left-full ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white z-50 pointer-events-none">
+          Dashboard
+        </div>
+      </a>
+
+      <!-- Section: INTAKE -->
+      <div x-data="{ open: localStorage.getItem('nav_intake') !== 'false' }">
+        <div x-show="!sidebarCollapsed" x-cloak class="pt-3 pb-1 px-1">
+          <button @click="open = !open; localStorage.setItem('nav_intake', open)"
+            class="flex items-center justify-between w-full group/hdr rounded px-1 py-0.5 hover:bg-gray-100 transition-colors duration-150 focus:outline-none">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400 group-hover/hdr:text-gray-500 select-none">Intake</span>
+            <svg :class="{ 'rotate-180': !open }" class="w-3.5 h-3.5 text-gray-400 group-hover/hdr:text-gray-500 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+        </div>
+        <div x-show="sidebarCollapsed" x-cloak class="border-t border-gray-200 mx-1 mt-3 mb-1"></div>
+
+        <div x-show="open || sidebarCollapsed"
+          x-transition:enter="transition-all ease-out duration-200 overflow-hidden"
+          x-transition:enter-start="opacity-0 max-h-0"
+          x-transition:enter-end="opacity-100 max-h-96"
+          x-transition:leave="transition-all ease-in duration-150 overflow-hidden"
+          x-transition:leave-start="opacity-100 max-h-96"
+          x-transition:leave-end="opacity-0 max-h-0"
+          class="space-y-1">
+
+          <!-- INTAKE: Scan Batches, Separator Sheets, QA Review - Check view_donationbatch permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_donationbatch' in user_permissions or 'custom_admin.view_donationbatch' in user_permissions %}
+
+          <!-- Scan Batches -->
+          <a href="{% url url_namespace|add:':scan_processing_dashboard' %}"
+            hx-boost="false"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'scan_processing' or 'scan_' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'scan_processing' or 'scan_' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd"
+                d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Scan Batches</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white z-50 pointer-events-none">
+              Scan Batches
+            </div>
+          </a>
+
+
+          <!-- QA Review -->
+          <a href="{% url url_namespace|add:':qa_dashboard' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'qa_review' or 'qa_' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'qa_review' or 'qa_' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd"
+                d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">QA Review</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white z-50 pointer-events-none">
+              QA Review
+            </div>
+          </a>
+          {% endif %}
+
+          <!-- Phone Intake - Check add_donation permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'add_donation' in user_permissions or 'donations.add_donation' in user_permissions %}
+          <a href="{% url url_namespace|add:':phone_intake_console' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'phone_intake' or 'phone_intake' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'phone_intake' or 'phone_intake' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path
+                d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z">
+              </path>
+            </svg>
+            <span class="nav-text">Phone Intake</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white z-50 pointer-events-none">
+              Phone Intake
+            </div>
+          </a>
+          {% endif %}
+
+        </div>
+      </div>
+
+      <!-- Section: CORE DATA -->
+      <div x-data="{ open: localStorage.getItem('nav_coredata') !== 'false' }">
+        <div x-show="!sidebarCollapsed" x-cloak class="pt-3 pb-1 px-1">
+          <button @click="open = !open; localStorage.setItem('nav_coredata', open)"
+            class="flex items-center justify-between w-full group/hdr rounded px-1 py-0.5 hover:bg-gray-100 transition-colors duration-150 focus:outline-none">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400 group-hover/hdr:text-gray-500 select-none">Core Data</span>
+            <svg :class="{ 'rotate-180': !open }" class="w-3.5 h-3.5 text-gray-400 group-hover/hdr:text-gray-500 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+        </div>
+        <div x-show="sidebarCollapsed" x-cloak class="border-t border-gray-200 mx-1 mt-3 mb-1"></div>
+
+        <div x-show="open || sidebarCollapsed"
+          x-transition:enter="transition-all ease-out duration-200 overflow-hidden"
+          x-transition:enter-start="opacity-0 max-h-0"
+          x-transition:enter-end="opacity-100 max-h-96"
+          x-transition:leave="transition-all ease-in duration-150 overflow-hidden"
+          x-transition:leave-start="opacity-100 max-h-96"
+          x-transition:leave-end="opacity-0 max-h-0"
+          class="space-y-1">
+
+          <!-- Campaigns - Check view_campaign permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_campaign' in user_permissions or 'custom_admin.view_campaign' in user_permissions %}
+          <a href="{% url url_namespace|add:':admin_campaigns' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'campaigns' or request.resolver_match.url_name == 'admin_campaigns' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'campaigns' or request.resolver_match.url_name == 'admin_campaigns' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %} transition-colors duration-200"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+              <path fill-rule="evenodd"
+                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Campaigns</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md whitespace-nowrap z-50 pointer-events-none shadow-elite-lg">
+              Campaigns
+            </div>
+          </a>
+          {% else %}
+          <span
+            class="flex items-center px-3 py-2.5 text-sm font-medium rounded-md cursor-not-allowed opacity-50 transition-opacity duration-200">
+            <svg class="w-5 h-5 mr-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+              <path fill-rule="evenodd"
+                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="text-gray-400">Campaigns</span>
+          </span>
+          {% endif %}
+
+          <a href="{% url url_namespace|add:':donor_imports' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'donor_imports' or request.resolver_match.url_name == 'donor_imports' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'donor_imports' or request.resolver_match.url_name == 'donor_imports' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M3 4a2 2 0 012-2h6l6 6v8a2 2 0 01-2 2H5a2 2 0 01-2-2V4zm8 0v4h4"></path>
+              <path d="M7 11a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm0 3a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z"></path>
+            </svg>
+            <span class="nav-text">Donor Imports</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Donor Imports
+            </div>
+          </a>
+
+          <!-- Supporters - Always visible for staff -->
+          <a href="{% url url_namespace|add:':supporter_list' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'supporters' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'supporters' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+            </svg>
+            <span class="nav-text">Supporters</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md whitespace-nowrap z-50 pointer-events-none shadow-elite-lg">
+              Supporters
+            </div>
+          </a>
+
+
+
+
+        </div>
+      </div>
+
+      <!-- Section: FINANCE -->
+      <div x-data="{ open: localStorage.getItem('nav_finance') !== 'false' }">
+        <div x-show="!sidebarCollapsed" x-cloak class="pt-3 pb-1 px-1">
+          <button @click="open = !open; localStorage.setItem('nav_finance', open)"
+            class="flex items-center justify-between w-full group/hdr rounded px-1 py-0.5 hover:bg-gray-100 transition-colors duration-150 focus:outline-none">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400 group-hover/hdr:text-gray-500 select-none">Finance</span>
+            <svg :class="{ 'rotate-180': !open }" class="w-3.5 h-3.5 text-gray-400 group-hover/hdr:text-gray-500 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+        </div>
+        <div x-show="sidebarCollapsed" x-cloak class="border-t border-gray-200 mx-1 mt-3 mb-1"></div>
+
+        <div x-show="open || sidebarCollapsed"
+          x-transition:enter="transition-all ease-out duration-200 overflow-hidden"
+          x-transition:enter-start="opacity-0 max-h-0"
+          x-transition:enter-end="opacity-100 max-h-96"
+          x-transition:leave="transition-all ease-in duration-150 overflow-hidden"
+          x-transition:leave-start="opacity-100 max-h-96"
+          x-transition:leave-end="opacity-0 max-h-0"
+          class="space-y-1">
+
+          <!-- Daily Banking - Check view_donation permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_donation' in user_permissions or 'custom_admin.view_donation' in user_permissions %}
+          <a href="{% url url_namespace|add:':daily_banking_dashboard' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'daily_banking' or 'slip' in request.resolver_match.url_name or 'daily_banking' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'daily_banking' or 'slip' in request.resolver_match.url_name or 'daily_banking' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"></path>
+              <path fill-rule="evenodd"
+                d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Daily Banking</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Daily Banking
+            </div>
+          </a>
+          {% endif %}
+
+          <!-- Invoices - Admin only -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_invoice' in user_permissions or 'invoices.view_invoice' in user_permissions %}
+          <a href="{% url 'custom_admin:invoice_list' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'invoices' or 'invoice' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'invoices' or 'invoice' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
+              <path fill-rule="evenodd"
+                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Invoices</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Invoices
+            </div>
+          </a>
+
+          {% endif %}
+
+        </div>
+      </div>
+
+      <!-- Section: REPORTING -->
+      <div x-data="{ open: localStorage.getItem('nav_reporting') !== 'false' }">
+        <div x-show="!sidebarCollapsed" x-cloak class="pt-3 pb-1 px-1">
+          <button @click="open = !open; localStorage.setItem('nav_reporting', open)"
+            class="flex items-center justify-between w-full group/hdr rounded px-1 py-0.5 hover:bg-gray-100 transition-colors duration-150 focus:outline-none">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400 group-hover/hdr:text-gray-500 select-none">Reporting</span>
+            <svg :class="{ 'rotate-180': !open }" class="w-3.5 h-3.5 text-gray-400 group-hover/hdr:text-gray-500 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+        </div>
+        <div x-show="sidebarCollapsed" x-cloak class="border-t border-gray-200 mx-1 mt-3 mb-1"></div>
+
+        <div x-show="open || sidebarCollapsed"
+          x-transition:enter="transition-all ease-out duration-200 overflow-hidden"
+          x-transition:enter-start="opacity-0 max-h-0"
+          x-transition:enter-end="opacity-100 max-h-96"
+          x-transition:leave="transition-all ease-in duration-150 overflow-hidden"
+          x-transition:leave-start="opacity-100 max-h-96"
+          x-transition:leave-end="opacity-0 max-h-0"
+          class="space-y-1">
+
+          <!-- Reports - Always visible for logged in users -->
+          <a href="{% url url_namespace|add:':admin_reports' %}?clear=1"
+            hx-boost="false"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'reports' or request.resolver_match.url_name == 'admin_reports' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'reports' or request.resolver_match.url_name == 'admin_reports' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path
+                d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z">
+              </path>
+            </svg>
+            <span class="nav-text">Reports</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Reports
+            </div>
+          </a>
+
+          <!-- Letter Setup - Check view_lettertemplate permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_lettertemplate' in user_permissions or 'custom_admin.view_lettertemplate' in user_permissions %}
+          <a href="{% url url_namespace|add:':letter_print_console' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'letter_setup' or 'letter_setup' in request.resolver_match.url_name %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'letter_setup' or 'letter_setup' in request.resolver_match.url_name %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+            </svg>
+            <span class="nav-text">Letter Setup</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Letter Setup
+            </div>
+          </a>
+          {% else %}
+          <span class="flex items-center px-4 py-3 text-sm font-medium rounded-md cursor-not-allowed opacity-50">
+            <svg class="w-5 h-5 mr-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+            </svg>
+            <span class="text-gray-400">Letter Setup</span>
+          </span>
+          {% endif %}
+
+        </div>
+      </div>
+
+      <!-- Section: ADMINISTRATION -->
+      <div x-data="{ open: localStorage.getItem('nav_admin') !== 'false' }">
+        <div x-show="!sidebarCollapsed" x-cloak class="pt-3 pb-1 px-1">
+          <button @click="open = !open; localStorage.setItem('nav_admin', open)"
+            class="flex items-center justify-between w-full group/hdr rounded px-1 py-0.5 hover:bg-gray-100 transition-colors duration-150 focus:outline-none">
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400 group-hover/hdr:text-gray-500 select-none">Administration</span>
+            <svg :class="{ 'rotate-180': !open }" class="w-3.5 h-3.5 text-gray-400 group-hover/hdr:text-gray-500 transition-transform duration-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+        </div>
+        <div x-show="sidebarCollapsed" x-cloak class="border-t border-gray-200 mx-1 mt-3 mb-1"></div>
+
+        <div x-show="open || sidebarCollapsed"
+          x-transition:enter="transition-all ease-out duration-200 overflow-hidden"
+          x-transition:enter-start="opacity-0 max-h-0"
+          x-transition:enter-end="opacity-100 max-h-96"
+          x-transition:leave="transition-all ease-in duration-150 overflow-hidden"
+          x-transition:leave-start="opacity-100 max-h-96"
+          x-transition:leave-end="opacity-0 max-h-0"
+          class="space-y-1">
+
+          <!-- Client Setup - Check view_client permission -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_client' in user_permissions or 'custom_admin.view_client' in user_permissions %}
+          <a href="{% url url_namespace|add:':client_setup' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'client_setup' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'client_setup' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd"
+                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Client Setup</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Client Setup
+            </div>
+          </a>
+          {% else %}
+          <span class="flex items-center px-4 py-3 text-sm font-medium rounded-md cursor-not-allowed opacity-50">
+            <svg class="w-5 h-5 mr-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd"
+                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="text-gray-400">Client Setup</span>
+          </span>
+          {% endif %}
+
+          <!-- User Management - Admin only -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_user' in user_permissions or 'core.view_user' in user_permissions %}
+          <a href="{% url 'custom_admin:admin_user_management' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'user_management' or request.resolver_match.url_name == 'admin_user_management' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'user_management' or request.resolver_match.url_name == 'admin_user_management' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path
+                d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z">
+              </path>
+            </svg>
+            <span class="nav-text">User Management</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              User Management
+            </div>
+          </a>
+          {% endif %}
+
+          <!-- Audit History - Admin only -->
+          {% if is_admin_user or 'all' in user_permissions or 'view_auditlog' in user_permissions or 'audit.view_auditlog' in user_permissions %}
+          <a href="{% url 'custom_admin:audit_log_history' %}"
+            class="flex items-center text-sm font-medium rounded-sm group relative transition-all duration-200 {% if active == 'audit_history' or request.resolver_match.url_name == 'audit_log_history' %}text-blue-700 bg-blue-50{% else %}text-gray-700 hover:bg-gray-100 hover:text-gray-900{% endif %} nav-link-padding"
+            x-data="{ showTooltip: false }" @mouseenter="sidebarCollapsed && (showTooltip = true)"
+            @mouseleave="showTooltip = false">
+            <svg
+              class="w-5 h-5 flex-shrink-0 transition-colors duration-200 {% if active == 'audit_history' or request.resolver_match.url_name == 'audit_log_history' %}text-blue-600{% else %}text-gray-500 group-hover:text-gray-700{% endif %}"
+              fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd"
+                d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
+                clip-rule="evenodd"></path>
+            </svg>
+            <span class="nav-text">Audit History</span>
+            <div x-show="showTooltip && sidebarCollapsed" x-cloak
+              class="absolute left-full ml-3 px-3 py-2 bg-gray-900 text-white text-sm font-medium rounded-md shadow-elite-lg whitespace-nowrap z-50 pointer-events-none">
+              Audit History
+            </div>
+          </a>
+          {% endif %}
+
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content Area -->
+  <div class="flex-1 flex flex-col min-h-0" style="min-width: 0;">
+
+    <!-- Top Navigation Bar - Fixed Height -->
+    <header class="app-chrome-header bg-white border-b border-slate-200 relative z-30">
+      <div class="flex items-center justify-between h-full px-3 md:px-4" style="overflow: visible;">
+        <!-- Mobile menu button -->
+        <button @click.stop="sidebarOpen = !sidebarOpen" type="button"
+          class="lg:hidden text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-2 transition-colors duration-200"
+          aria-label="Toggle sidebar" :aria-expanded="sidebarOpen.toString()" aria-controls="sidebar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+
+        <div class="flex-1 min-w-0" aria-hidden="true"></div>
+
+        <div class="flex items-center justify-center gap-2 md:gap-3">
+          <!-- Unified Notifications Bell - Handles both Task and Database Notifications -->
+          <div class="relative" x-data="unifiedNotifications()">
+            <button @click="toggleDropdown()" type="button"
+              class="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md transition-all duration-200"
+              aria-label="Notifications">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                </path>
+              </svg>
+              <!-- Blue Dot Indicator for Unread Notifications -->
+              <span x-show="totalCount > 0" x-cloak
+                class="absolute top-2 right-2 block h-3 w-3 rounded-full bg-blue-600 ring-2 ring-white z-10"></span>
+            </button>
+
+            <!-- Unified Notifications Dropdown -->
+            <div x-show="isOpen" @click.away="isOpen = false" x-transition:enter="transition ease-out duration-200"
+              x-transition:enter-start="opacity-0 transform scale-95"
+              x-transition:enter-end="opacity-100 transform scale-100"
+              x-transition:leave="transition ease-in duration-150"
+              x-transition:leave-start="opacity-100 transform scale-100"
+              x-transition:leave-end="opacity-0 transform scale-95" x-cloak
+              class="absolute right-0 mt-2 w-96 bg-white rounded-md border border-gray-200 max-h-[32rem] overflow-hidden"
+              style="z-index: 9999;">
+
+              <!-- Header with Tabs and Actions -->
+              <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900">Notifications</h3>
+                  <div class="flex items-center space-x-2">
+                    <!-- Refresh Button -->
+                    <button type="button" @click="refreshAll()" :disabled="isRefreshing"
+                      class="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                      :class="{ 'animate-spin': isRefreshing }" title="Refresh notifications">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                        </path>
+                      </svg>
+                    </button>
+                    <!-- Clear All Button -->
+                    <button type="button" @click="clearAll()"
+                      class="text-xs text-red-600 hover:text-red-800 px-2 py-1 hover:bg-red-50 rounded-md transition-colors"
+                      x-show="activeTab === 'tasks' ? taskNotifs.length > 0 : dbNotifs.length > 0">
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="flex space-x-1 bg-gray-100 rounded-md p-1">
+                  <button type="button" @click="activeTab = 'tasks'"
+                    :class="activeTab === 'tasks' ? 'bg-white text-gray-900' : 'text-gray-600 hover:text-gray-900'"
+                    class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+                    Tasks <span x-show="taskNotifs.length > 0"
+                      class="ml-1 px-1.5 py-0.5 bg-blue-600 text-white rounded-full text-xs"
+                      x-text="taskNotifs.length"></span>
+                  </button>
+                  <button type="button" @click="activeTab = 'database'"
+                    :class="activeTab === 'database' ? 'bg-white text-gray-900' : 'text-gray-600 hover:text-gray-900'"
+                    class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all">
+                    System <span x-show="dbUnreadCount > 0"
+                      class="ml-1 px-1.5 py-0.5 bg-red-600 text-white rounded-full text-xs"
+                      x-text="dbUnreadCount"></span>
+                  </button>
+                </div>
+
+                <!-- Active tasks summary -->
+                <p class="text-xs text-gray-500 mt-2" x-show="activeTab === 'tasks' && activeTasksCount > 0">
+                  <span x-text="activeTasksCount"></span> active task(s) running
+                </p>
+              </div>
+
+              <!-- Notifications List -->
+              <div class="overflow-y-auto max-h-96">
+                <!-- Tasks Tab Content -->
+                <div x-show="activeTab === 'tasks'">
+                  <div x-show="taskNotifs.length === 0" class="px-4 py-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
+                      </path>
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-500">No active tasks</p>
+                  </div>
+
+                  <template x-for="notif in taskNotifs" :key="notif.id">
+                    <div class="px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <!-- Header Row -->
+                      <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center space-x-2 flex-1 min-w-0">
+                          <!-- Task Type Icon -->
+                          <span class="flex-shrink-0">
+                            <template x-if="notif.type === 'letter'">
+                              <svg class="w-4 h-4 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
+                                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+                              </svg>
+                            </template>
+                            <template x-if="notif.type === 'upload'">
+                              <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                                  clip-rule="evenodd"></path>
+                              </svg>
+                            </template>
+                          </span>
+                          <span class="text-sm font-medium text-gray-900 truncate" x-text="notif.title"></span>
+                        </div>
+                        <!-- Status Badge -->
+                        <span :class="{
+                              'bg-blue-100 text-blue-800': notif.status === 'processing',
+                              'bg-yellow-100 text-yellow-800': notif.status === 'pending',
+                              'bg-green-100 text-green-800': notif.status === 'completed',
+                              'bg-red-100 text-red-800': notif.status === 'failed',
+                              'bg-gray-100 text-gray-800': notif.status === 'cancelled'
+                            }"
+                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ml-2">
+                          <span x-text="notif.status.charAt(0).toUpperCase() + notif.status.slice(1)"></span>
+                        </span>
+                      </div>
+
+                      <!-- Message -->
+                      <p class="text-xs text-gray-600 mb-2" x-text="notif.message"></p>
+
+                      <!-- Progress Bar (for processing tasks) -->
+                      <template x-if="(notif.status === 'processing' || notif.status === 'pending') && notif.total > 0">
+                        <div class="mb-2">
+                          <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span x-text="notif.successful + ' / ' + notif.total"></span>
+                            <span x-text="Math.round((notif.successful / notif.total) * 100) + '%'"></span>
+                          </div>
+                          <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              :style="'width: ' + Math.round((notif.successful / notif.total) * 100) + '%'"></div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- Completion Stats -->
+                      <template x-if="notif.status === 'completed'">
+                        <div class="flex items-center space-x-3 text-xs">
+                          <span class="text-green-600 flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                            <span x-text="notif.successful + ' success'"></span>
+                          </span>
+                          <span class="text-red-600 flex items-center" x-show="notif.failed > 0">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                            <span x-text="notif.failed + ' failed'"></span>
+                          </span>
+                        </div>
+                      </template>
+
+                      <!-- Failed Stats -->
+                      <template x-if="notif.status === 'failed'">
+                        <div class="text-xs text-red-600">
+                          <span>Task failed. </span>
+                          <span x-show="notif.successful > 0"
+                            x-text="notif.successful + ' completed before failure.'"></span>
+                        </div>
+                      </template>
+
+                      <!-- Footer with time and actions -->
+                      <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                        <span class="text-xs text-gray-400" x-text="notif.time"></span>
+                        <div class="flex items-center space-x-2">
+                          <!-- Refresh single task -->
+                          <button type="button" @click.stop="refreshTask(notif)"
+                            x-show="notif.status === 'processing' || notif.status === 'pending'"
+                            class="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                              </path>
+                            </svg>
+                            Refresh
+                          </button>
+                          <!-- Remove notification -->
+                          <button type="button" @click.stop="removeNotification(notif.id, 'task')"
+                            class="text-xs text-gray-400 hover:text-red-600">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Database Notifications Tab Content -->
+                <div x-show="activeTab === 'database'">
+                  <div x-show="dbNotifs.length === 0" class="px-4 py-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z">
+                      </path>
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-500">No system notifications</p>
+                  </div>
+
+                  <template x-for="notif in dbNotifs" :key="notif.id">
+                    <a :href="notif.link || '{% url 'custom_admin:notification_list' %}'"
+                      @click="markDbNotifRead(notif.id)"
+                      class="block px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <div class="flex items-start gap-2">
+                        <!-- Type Icon -->
+                        <div class="flex-shrink-0 mt-0.5">
+                          <template x-if="notif.notification_type === 'success'">
+                            <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                          </template>
+                          <template x-if="notif.notification_type === 'error'">
+                            <svg class="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                          </template>
+                          <template x-if="notif.notification_type === 'warning'">
+                            <svg class="w-4 h-4 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                          </template>
+                          <template x-if="notif.notification_type === 'info'">
+                            <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                clip-rule="evenodd"></path>
+                            </svg>
+                          </template>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-start justify-between mb-1">
+                            <p class="text-sm font-medium text-gray-900 truncate" x-text="notif.title"></p>
+                            <span x-show="!notif.is_read"
+                              class="ml-2 flex-shrink-0 w-2 h-2 bg-blue-600 rounded-full"></span>
+                          </div>
+                          <p class="text-xs text-gray-600 line-clamp-2" x-text="notif.message"></p>
+                          <p class="text-xs text-gray-400 mt-1" x-text="notif.time"></p>
+                        </div>
+                      </div>
+                    </a>
+                  </template>
+
+                  <!-- View All Link -->
+                  <div class="px-4 py-3 border-t border-gray-200 bg-gray-50 text-center">
+                    <a href="{% url 'custom_admin:notification_list' %}"
+                      class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                      View All System Notifications →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Menu -->
+          <div class="relative" x-data="{ showMenu: false }" @click.away="showMenu = false"
+            @keydown.escape.window="showMenu = false">
+            <button @click="showMenu = !showMenu" type="button"
+              class="flex items-center space-x-3 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md px-2 py-1.5 transition-all duration-200"
+              aria-haspopup="true" :aria-expanded="showMenu" aria-controls="user-menu-dropdown">
+              <div
+                class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                {{ request.user.username|slice:":1"|upper }}
+              </div>
+              <div class="hidden md:block text-left">
+                <span class="block text-sm font-semibold text-gray-900">{{ request.user.get_full_name|default:request.user.username }}</span>
+                <span class="block text-xs text-gray-500">{% if is_admin_user %}Administrator{% else %}User{% endif %}</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="showMenu ? 'rotate-180' : ''"
+                fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd"></path>
+              </svg>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div x-show="showMenu" x-cloak x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100"
+              x-transition:leave-end="opacity-0 scale-95"
+              class="absolute right-0 mt-2 w-56 bg-white rounded-md py-1 border border-gray-200"
+              style="z-index: 9999;" role="menu" id="user-menu-dropdown" aria-label="User menu">
+
+              <!-- User Info Section -->
+              <div class="px-4 py-3 border-b border-gray-200">
+                <p class="text-sm font-semibold text-gray-900">{{ request.user.get_full_name|default:request.user.username }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ request.user.email }}</p>
+              </div>
+
+              <a href="{% url 'auth_app:user_profile' %}"
+                class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                role="menuitem">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+                Your Profile
+              </a>
+
+              <a href="{% url url_namespace|add:':admin_settings' %}"
+                class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                role="menuitem">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                  </path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Settings
+              </a>
+
+              <hr class="my-1 border-gray-200">
+
+              <button type="button"
+                hx-post="{% url 'auth_app:logout' %}"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                hx-push-url="/"
+                hx-target="body"
+                class="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-danger-600 hover:bg-danger-50 transition-colors duration-150"
+                role="menuitem">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                  </path>
+                </svg>
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="flex-1 overflow-y-auto p-3 md:p-4 page-transition" role="main" id="main-content">
+      <!-- Breadcrumb Navigation -->
+      {% include 'components/breadcrumb.html' %}
+
+      {% block page_content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="admin-js-toast-container" class="fixed top-20 right-4 z-50 flex flex-col gap-3 max-w-sm pointer-events-none" role="region"
+  aria-label="Notifications" aria-live="polite">
+</div>
+
+<!-- Unified Notifications Alpine.js Component -->
+<script>
+  /**
+   * Toast Notification System
+   * Displays temporary toast notifications at the top-right of the screen
+   * 
+   * @param {string} message - The message to display
+   * @param {string} type - The type of toast: 'success', 'error', 'warning', 'info'
+   * @param {number} duration - Duration in milliseconds (default: 5000)
+   */
+  window.toastIdCounter = window.toastIdCounter || 0;
+
+  function showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('admin-js-toast-container');
+    if (!container) {
+      console.error('Toast container not found');
+      return;
+    }
+
+    const toastId = `toast-${++window.toastIdCounter}`;
+
+    // Determine colors and icon based on type
+    let borderColor, bgColor, textColor, iconSvg;
+
+    switch (type) {
+      case 'error':
+        borderColor = 'border-red-500';
+        bgColor = 'bg-red-50';
+        textColor = 'text-red-600';
+        iconSvg = `<svg class="w-5 h-5" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+      </svg>`;
+        break;
+      case 'warning':
+        borderColor = 'border-orange-500';
+        bgColor = 'bg-orange-50';
+        textColor = 'text-orange-600';
+        iconSvg = `<svg class="w-5 h-5" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+      </svg>`;
+        break;
+      case 'success':
+        borderColor = 'border-green-500';
+        bgColor = 'bg-green-50';
+        textColor = 'text-green-600';
+        iconSvg = `<svg class="w-5 h-5" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+      </svg>`;
+        break;
+      default: // info
+        borderColor = 'border-blue-500';
+        bgColor = 'bg-blue-50';
+        textColor = 'text-blue-600';
+        iconSvg = `<svg class="w-5 h-5" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+      </svg>`;
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = `toast-notification flex items-start w-full p-4 text-gray-800 bg-white rounded-md border-l-4 ${borderColor} pointer-events-auto transition-all duration-300 transform translate-x-0 opacity-100`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+
+    toast.innerHTML = `
+    <div class="inline-flex items-center justify-center shrink-0 w-10 h-10 rounded-md ${textColor} ${bgColor}">
+      ${iconSvg}
+    </div>
+    <div class="ml-3 text-sm font-medium flex-1">
+      ${message}
+    </div>
+    <button type="button" 
+            class="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-md focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 transition-colors" 
+            onclick="removeToast('${toastId}')"
+            aria-label="Close notification">
+      <svg class="w-3 h-3" aria-hidden="true" fill="none" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
+      </svg>
+    </button>
+  `;
+
+    // Add to container
+    container.appendChild(toast);
+
+    // Animate in (slide from right)
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateX(0)';
+      toast.style.opacity = '1';
+    });
+
+    // Auto-remove after duration
+    setTimeout(() => {
+      removeToast(toastId);
+    }, duration);
+  }
+
+  /**
+   * Remove a toast notification
+   * @param {string} toastId - The ID of the toast to remove
+   */
+  function removeToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (!toast) return;
+
+    // Animate out
+    toast.style.transform = 'translateX(100%)';
+    toast.style.opacity = '0';
+
+    // Remove from DOM after animation
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }
+
+  /**
+   * Unified Notifications System
+   * 
+   * Combines two notification sources:
+   * 1. Task Notifications (localStorage) - 'upload' and 'letter' tasks
+   * 2. Database Notifications (API) - system notifications from database
+   * 
+   * Task Notification Structure:
+   * {
+   *   id: string,           // Task ID
+   *   type: 'upload'|'letter',
+   *   title: string,
+   *   message: string,
+   *   status: 'pending'|'processing'|'completed'|'failed'|'cancelled',
+   *   time: string,
+   *   total: number,
+   *   successful: number,
+   *   failed: number
+   * }
+   * 
+   * Database Notification Structure:
+   * {
+   *   id: string,
+   *   title: string,
+   *   message: string,
+   *   notification_type: 'info'|'success'|'warning'|'error',
+   *   is_read: boolean,
+   *   link: string,
+   *   time: string
+   * }
+   */
+  function unifiedNotifications() {
+    return {
+      isOpen: false,
+      activeTab: 'tasks',
+      taskNotifs: [],
+      dbNotifs: [],
+      dbUnreadCount: 0,
+      isRefreshing: false,
+      urls: {
+          count: '{% url "custom_admin:notification_count_api" %}',
+          list: '{% url "custom_admin:notification_list" %}?format=json',
+          stream: '{% url "custom_admin:notification_stream_api" %}'
+      },
+
+      // Named handler references for proper cleanup
+      _visibilityHandler: null,
+      _storageHandler: null,
+      _taskNotifHandler: null,
+
+      // Computed properties
+      get hasActiveTasks() {
+        return this.taskNotifs.some(n => n.status === 'processing' || n.status === 'pending');
+      },
+      get activeTasksCount() {
+        return this.taskNotifs.filter(n => n.status === 'processing' || n.status === 'pending').length;
+      },
+      get totalCount() {
+        return this.taskNotifs.length + this.dbUnreadCount;
+      },
+
+      init() {
+        // Clean up any previous instance first (hx-boost body swap)
+        this.destroy();
+
+        // Load task notifications from localStorage
+        this.loadTaskNotifications();
+
+        // Initialize SSE for real-time system notifications
+        this.setupSSE();
+
+        // Create named handlers so we can remove them later
+        this._visibilityHandler = () => {
+          if (document.visibilityState === 'visible') {
+            console.log('[NotificationVisibility] Tab visible, checking notifications...');
+            this.setupSSE();
+          } else {
+            console.log('[NotificationVisibility] Tab hidden, disconnecting SSE to free thread...');
+            this._closeSSE();
+          }
+        };
+
+        this._storageHandler = (e) => {
+          if (e.key === 'taskNotifications') {
+            this.loadTaskNotifications();
+          }
+        };
+
+        this._taskNotifHandler = () => {
+          this.loadTaskNotifications();
+        };
+
+        // Listen for visibility change to save server threads
+        document.addEventListener('visibilitychange', this._visibilityHandler);
+
+        // Listen for storage events (cross-tab sync)
+        window.addEventListener('storage', this._storageHandler);
+
+        // Listen for custom notification events
+        window.addEventListener('taskNotificationAdded', this._taskNotifHandler);
+      },
+
+      /**
+       * Clean up all resources: SSE connection, poll interval, event listeners.
+       * Called before Alpine component re-init and on htmx:beforeSwap.
+       */
+      destroy() {
+        // Close SSE connection (window-level singleton)
+        this._closeSSE();
+
+        // Clear polling interval (window-level singleton)
+        if (window._notificationPollInterval) {
+          clearInterval(window._notificationPollInterval);
+          window._notificationPollInterval = null;
+        }
+
+        // Remove event listeners (only if we have named references)
+        if (this._visibilityHandler) {
+          document.removeEventListener('visibilitychange', this._visibilityHandler);
+          this._visibilityHandler = null;
+        }
+        if (this._storageHandler) {
+          window.removeEventListener('storage', this._storageHandler);
+          this._storageHandler = null;
+        }
+        if (this._taskNotifHandler) {
+          window.removeEventListener('taskNotificationAdded', this._taskNotifHandler);
+          this._taskNotifHandler = null;
+        }
+      },
+
+      /** Close the SSE EventSource singleton stored on window. */
+      _closeSSE() {
+        if (window._notificationSSE) {
+          window._notificationSSE.close();
+          window._notificationSSE = null;
+        }
+      },
+
+      loadTaskNotifications() {
+        try {
+          this.taskNotifs = JSON.parse(localStorage.getItem('taskNotifications') || '[]');
+        } catch (e) {
+          console.error('Failed to load task notifications:', e);
+          this.taskNotifs = [];
+        }
+      },
+
+      saveTaskNotifications() {
+        localStorage.setItem('taskNotifications', JSON.stringify(this.taskNotifs));
+        // Trigger storage event for cross-tab sync
+        window.dispatchEvent(new Event('storage'));
+      },
+
+      async loadDatabaseNotifications(source = 'unknown') {
+        try {
+          if (document.visibilityState !== 'visible' && !this.isOpen) {
+             return; // Don't fetch if tab is hidden and dropdown closed
+          }
+
+          console.log(`[NotificationPoll] Fetching unread count. Source: ${source}`);
+
+          // 1. Always fetch unread count to update the red badge
+          const countResponse = await fetch(this.urls.count);
+          if (countResponse.ok) {
+            const data = await countResponse.json();
+            this.dbUnreadCount = data.unread_count || 0;
+          }
+
+          // 2. Fetch full list ONLY if dropdown is open
+          if (this.isOpen) {
+             const listResponse = await fetch(this.urls.list);
+             if (listResponse.ok) {
+               const listData = await listResponse.json();
+               this.dbNotifs = listData.notifications || [];
+             }
+          }
+        } catch (error) {
+          console.error('[NotificationPoll] Failed to load database notifications:', error);
+        }
+      },
+
+      setupSSE() {
+          // Don't setup SSE if tab is hidden
+          if (document.visibilityState !== 'visible') {
+              return;
+          }
+
+          // Close any existing SSE connection (window-level singleton)
+          this._closeSSE();
+
+          // Clear any pending SSE reconnect timer
+          if (window._notificationSSERetryTimer) {
+              clearTimeout(window._notificationSSERetryTimer);
+              window._notificationSSERetryTimer = null;
+          }
+
+          try {
+              const es = new EventSource(this.urls.stream);
+              window._notificationSSE = es;
+              console.log('[NotificationSSE] Connecting to:', this.urls.stream);
+              
+              es.onopen = () => {
+                  console.log('[NotificationSSE] Connection established successfully');
+                  this.startPolling();
+              };
+
+              es.onmessage = (event) => {
+                  const newCount = parseInt(event.data);
+                  console.log('[NotificationSSE] Received update, new count:', newCount);
+                  if (!isNaN(newCount)) {
+                      this.dbUnreadCount = newCount;
+                      
+                      // If dropdown is open, refresh the list too
+                      if (this.isOpen) {
+                          this.loadDatabaseNotifications('sse-update');
+                      }
+                  }
+              };
+
+              es.onerror = () => {
+                  console.warn('[NotificationSSE] Connection lost or closed.');
+                  this._closeSSE();
+                  
+                  // Only auto-reconnect if tab is still visible
+                  if (document.visibilityState === 'visible') {
+                      console.log('[NotificationSSE] Retrying in 30s...');
+                      window._notificationSSERetryTimer = setTimeout(() => this.setupSSE(), 30000);
+                  }
+                  
+                  this.startPolling();
+              };
+          } catch (e) {
+              console.error('SSE setup failed:', e);
+              this.startPolling();
+          }
+      },
+
+      toggleDropdown() {
+        this.isOpen = !this.isOpen;
+        if (this.isOpen) {
+          this.loadDatabaseNotifications();
+        }
+      },
+
+      startPolling() {
+        // Clear existing interval if any (window-level singleton)
+        if (window._notificationPollInterval) {
+          clearInterval(window._notificationPollInterval);
+          window._notificationPollInterval = null;
+        }
+
+        // Only poll if we have active tasks (uploads/letters)
+        // System notifications are handled on-demand (opening dropdown/refresh)
+        window._notificationPollInterval = setInterval(() => {
+          if (this.hasActiveTasks) {
+            this.pollActiveTasks();
+          }
+        }, 10000);
+      },
+
+      async pollActiveTasks() {
+        const activeTasks = this.taskNotifs.filter(n =>
+          n.status === 'processing' || n.status === 'pending'
+        );
+
+        if (activeTasks.length === 0) return;
+
+        for (const notif of activeTasks) {
+          const oldStatus = notif.status;
+          await this.fetchTaskStatus(notif);
+          
+          // Trigger toast if task just finished
+          if (oldStatus !== notif.status && (notif.status === 'completed' || notif.status === 'failed')) {
+              const type = notif.status === 'completed' ? (notif.failed > 0 ? 'warning' : 'success') : 'error';
+              const message = `${notif.title}: ${notif.message}`;
+              if (window.showToast) {
+                  window.showToast(message, type);
+              } else {
+                  showToast(message, type);
+              }
+          }
+        }
+
+        this.saveTaskNotifications();
+      },
+
+      async fetchTaskStatus(notif) {
+        try {
+          const uploadTaskStatusBaseUrl = '{% url "custom_admin:data-file-upload-list" %}';
+          const letterTaskStatusBaseUrl = '{% url "custom_admin:letter-batch-list" %}';
+          let endpoint = '';
+
+          if (notif.type === 'upload') {
+            endpoint = `${uploadTaskStatusBaseUrl}${notif.id}/task_status/`;
+          } else if (notif.type === 'letter') {
+            endpoint = `${letterTaskStatusBaseUrl}${notif.id}/task-status/`;
+          } else {
+            return;
+          }
+
+          const response = await fetch(endpoint);
+          if (!response.ok) {
+            console.error(`Failed to fetch status for ${notif.type} ${notif.id}`);
+            return;
+          }
+
+          const data = await response.json();
+          const index = this.taskNotifs.findIndex(n => n.id === notif.id);
+
+          if (index === -1) return;
+
+          if (notif.type === 'upload') {
+            this.taskNotifs[index].status = data.upload_status || data.status;
+            this.taskNotifs[index].successful = data.successful_imports || 0;
+            this.taskNotifs[index].failed = data.failed_imports || 0;
+            this.taskNotifs[index].total = data.total_rows || 0;
+            this.taskNotifs[index].message = `${data.successful_imports || 0}/${data.total_rows || 0} donors processed`;
+          } else if (notif.type === 'letter') {
+            this.taskNotifs[index].status = data.status;
+            this.taskNotifs[index].successful = data.generated_count || 0;
+            this.taskNotifs[index].failed = data.failed_count || 0;
+            this.taskNotifs[index].total = data.total_letters || 0;
+            this.taskNotifs[index].message = `${data.generated_count || 0}/${data.total_letters || 0} letters generated`;
+            if (data.batch_number) {
+              this.taskNotifs[index].batchNumber = data.batch_number;
+            }
+          }
+
+        } catch (error) {
+          console.error(`Error fetching task status for ${notif.type} ${notif.id}:`, error);
+        }
+      },
+
+      async refreshTask(notif) {
+        await this.fetchTaskStatus(notif);
+        this.saveTaskNotifications();
+      },
+
+      async refreshAll() {
+        this.isRefreshing = true;
+
+        try {
+          // Refresh task notifications
+          const activeTasks = this.taskNotifs.filter(n =>
+            n.status === 'processing' || n.status === 'pending'
+          );
+          await Promise.all(activeTasks.map(notif => this.fetchTaskStatus(notif)));
+          this.saveTaskNotifications();
+
+          // Refresh database notifications
+          await this.loadDatabaseNotifications();
+        } finally {
+          setTimeout(() => {
+            this.isRefreshing = false;
+          }, 500);
+        }
+      },
+
+      removeNotification(id, type) {
+        if (type === 'task') {
+          this.taskNotifs = this.taskNotifs.filter(n => n.id !== id);
+          this.saveTaskNotifications();
+        } else if (type === 'db') {
+          this.markDbNotifRead(id);
+        }
+      },
+
+      async markDbNotifRead(notificationId) {
+        try {
+          const markReadUrlTemplate = '{% url "custom_admin:notification_mark_read" "00000000-0000-0000-0000-000000000000" %}';
+          const response = await fetch(markReadUrlTemplate.replace('00000000-0000-0000-0000-000000000000', notificationId), {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              this.dbUnreadCount = Math.max(0, this.dbUnreadCount - 1);
+              // Refresh full list to show as read
+              this.loadDatabaseNotifications();
+            }
+          }
+        } catch (error) {
+          console.error('Error marking notification as read:', error);
+        }
+      },
+
+      clearAll() {
+        if (this.activeTab === 'tasks') {
+          this.taskNotifs = [];
+          this.saveTaskNotifications();
+        } else {
+          // Clear all database notifications
+          fetch('{% url "custom_admin:notification_mark_all_read" %}', {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+              'Content-Type': 'application/json'
+            }
+          }).then(() => {
+            this.loadDatabaseNotifications();
+          });
+        }
+      }
+    };
+  }
+
+  /**
+   * Global helper function to add a task notification
+   * Can be called from any page
+   * 
+   * @param {string} id - Task ID (upload ID or batch ID)
+   * @param {string} type - Task type: 'upload' or 'letter'
+   * @param {string} title - Notification title
+   * @param {string} message - Initial message
+   * @param {string} status - Initial status: 'pending', 'processing', etc.
+   * @param {object} extraData - Additional data (total, batchNumber, etc.)
+   */
+  function addTaskNotification(id, type, title, message, status, extraData = {}) {
+    const notifications = JSON.parse(localStorage.getItem('taskNotifications') || '[]');
+
+    // Check if notification already exists
+    const existingIndex = notifications.findIndex(n => n.id === id);
+
+    const notification = {
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      status: status,
+      time: new Date().toLocaleTimeString(),
+      successful: extraData.successful || 0,
+      failed: extraData.failed || 0,
+      total: extraData.total || 0,
+      batchNumber: extraData.batchNumber || null
+    };
+
+    if (existingIndex !== -1) {
+      notifications[existingIndex] = notification;
+    } else {
+      notifications.unshift(notification);
+    }
+
+    // Keep only last 20 notifications
+    if (notifications.length > 20) {
+      notifications.splice(20);
+    }
+
+    localStorage.setItem('taskNotifications', JSON.stringify(notifications));
+
+    // Trigger custom event to update the notification component
+    window.dispatchEvent(new CustomEvent('taskNotificationAdded'));
+  }
+
+  /**
+   * Backward-compatible addNotification function for existing bulk upload code
+   * Maps to the new addTaskNotification with type='upload'
+   */
+  function addNotification(id, title, message, status) {
+    addTaskNotification(id, 'upload', title, message, status);
+  }
+
+  /**
+   * Add a letter generation task notification
+   * Convenience wrapper for letter batch tasks
+   * 
+   * @param {string} batchId - Letter batch ID
+   * @param {string} campaignName - Campaign name
+   * @param {number} totalLetters - Total letters to generate
+   * @param {number} batchNumber - Batch number (optional)
+   */
+  function addLetterTaskNotification(batchId, campaignName, totalLetters, batchNumber = null) {
+    const title = `Letters: ${campaignName}`;
+    const message = `Generating ${totalLetters} letters...`;
+
+    addTaskNotification(batchId, 'letter', title, message, 'pending', {
+      total: totalLetters,
+      batchNumber: batchNumber
+    });
+  }
+
+
+  // Debug: Check Alpine.js initialization
+  document.addEventListener('alpine:init', () => {
+    console.log('✅ Alpine.js initialized successfully');
+  });
+</script>
+{% endblock %}

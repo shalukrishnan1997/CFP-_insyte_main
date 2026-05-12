@@ -1,0 +1,121 @@
+[project]
+name = "responsehandling"
+version = "0.1.0"
+description = "Donation Management System (DMS) for UK charities"
+requires-python = ">=3.14"
+dependencies = [
+    # Core
+    "django>=5.2,<5.3",
+    "djangorestframework>=3.16.1",
+    "django-filter>=25.2",
+    # Database
+    "psycopg2-binary>=2.9.11",
+    # Cache & Queue
+    "redis>=7.2.0",
+    "hiredis>=3.3.0",
+    "django-redis>=6.0.0",
+    "celery>=5.6.0",
+    "django-celery-beat>=2.8.1",
+    "django-celery-results>=2.6.0",
+    # Storage
+    "boto3>=1.42.0",
+    "django-storages[s3]>=1.14.6",
+    "whitenoise>=6.11.0",
+    # Auth & Security
+    "django-otp>=1.7.0",
+    "qrcode>=8.2",
+    # PDF & Docs
+    "reportlab>=4.4.10",
+    "pypdf>=6.7.4",
+    "python-docx>=1.2.0",
+    "docxtpl>=0.20.2",
+    "openpyxl>=3.1.5",
+    # Payments
+    "stripe>=14.3.0",
+    # Monitoring
+    "sentry-sdk>=2.53.0",
+    "python-json-logger>=4.0.0",
+    # Utilities
+    "python-dotenv>=1.2.1",
+    "gunicorn>=25.1.0",
+    "django-tailwind-cli>=4.5.1",
+    "django-csp>=4.0",
+    "django-axes>=8.3.1",
+    "django-fernet-encrypted-fields>=0.3.1",
+    "pyzbar>=0.1.9",
+    "pillow>=12.1.1",
+    "google-cloud-documentai>=3.10.0",
+    "sqlalchemy>=2.0.48",
+    "resend>=2.6.0",
+    "pypdfium2>=5.7.1",
+    "prometheus-client>=0.25.0",
+    "rapidfuzz>=3.14.5",
+    "tenacity>=9.1.4",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.2",
+    "pyright>=1.1.408",
+    "playwright>=1.58.0",
+    "pytest>=8.3.0",
+    "pytest-django>=4.11.0",
+    "pytest-playwright>=0.7.0",
+    "pytest-cov>=7.0.0",
+    "factory-boy>=3.3.3",
+    "django-stubs>=5.2.9",
+    "djangorestframework-stubs>=3.16.8",
+    "celery-types>=0.24.0",
+    "bandit>=1.8.3",
+    "pytest-mock>=3.15.1",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "responsehandling.settings.test"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+markers = [
+    "stripe_e2e: Calls the real Stripe test API; requires INSYTE_STRIPE_E2E_SECRET_KEY.",
+]
+addopts = "-ra --strict-markers --cov=audit --cov=auth_app --cov=banking --cov=campaigns --cov=client_portal --cov=clients --cov=core --cov=custom_admin --cov=donations --cov=donors --cov=invoices --cov=letters --cov=notifications --cov=payments --cov=responsehandling --cov=scans --cov-report=term-missing --cov-fail-under=70 --cov-config=pyproject.toml"
+
+[tool.coverage.run]
+omit = [
+    "responsehandling/settings/production.py",
+    "responsehandling/settings/development.py",
+    "core/management/commands/*",
+    "*/migrations/*",
+    "*/admin.py",
+    "*/admin_*.py",
+    "*/apps.py",
+]
+
+[tool.coverage.report]
+omit = [
+    "responsehandling/settings/production.py",
+    "responsehandling/settings/development.py",
+    "core/management/commands/*",
+    "*/migrations/*",
+    "*/admin.py",
+    "*/admin_*.py",
+    "*/apps.py",
+]
+
+[tool.django-stubs]
+django_settings_module = "responsehandling.settings.development"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+exclude = ["migrations", "venv", ".venv", "notes.txt"]
+
+[tool.ruff.lint]
+extend-select = ["I"]                              # Enables import sorting (like isort)
+select = ["E", "F", "DJ", "B", "UP", "SIM", "RUF"]
+ignore = ["E501", "RUF012"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

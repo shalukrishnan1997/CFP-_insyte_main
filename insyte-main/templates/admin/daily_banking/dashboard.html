@@ -1,0 +1,537 @@
+{% extends 'layouts/admin_layout.html' %}
+{% load admin_tags %}
+
+{% block title %}Daily Banking - DMS{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+  #banking-filters-form input.flatpickr-input,
+  #banking-filters-form input.flatpickr-input[readonly] {
+    border-width: 1px !important;
+    border-color: rgb(209 213 219) !important;
+  }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="mx-auto max-w-7xl space-y-4 pb-10" x-data="bankingFiltersApp()" x-init="init()">
+  <header class="page-header-section flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+    <div class="min-w-0">
+      <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Finance</p>
+      <h1 class="mt-1 text-xl font-semibold tracking-tight text-slate-900">Daily banking</h1>
+      <p class="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
+        Batches with approved physical payments (cash, cheques, vouchers) ready for a paying-in slip. Open a batch to review lines and create one slip per client.
+      </p>
+    </div>
+    <div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+      <a
+        href="{% url 'custom_admin:slip_list' %}"
+        class="dense-button inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+      >
+        View slips
+      </a>
+    </div>
+  </header>
+
+  <section class="flat-card border-blue-100 bg-blue-50 px-4 py-4 sm:px-5">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex min-w-0 flex-1 gap-3">
+        <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="min-w-0 pt-0.5">
+          <p class="text-sm font-semibold text-slate-900">What you see here</p>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600">
+            Donations dated (or received) between {{ date_from|date:'d M Y' }} and {{ date_to|date:'d M Y' }}, QA-approved, bankable, not yet on a slip. Card and Direct Debit stay in electronic reconciliation — not here.
+          </p>
+        </div>
+      </div>
+      <dl class="flex shrink-0 flex-wrap items-start gap-2 text-xs font-medium sm:max-w-[10rem] sm:flex-col sm:items-end">
+        <div class="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-slate-800">{{ total_banking_batches }} batch{{ total_banking_batches|pluralize }}</div>
+        <div class="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-slate-800">{{ total_unassigned }} item{{ total_unassigned|pluralize }}</div>
+        <div class="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[11px] text-slate-800">£{{ total_amount|floatformat:2 }}</div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header">
+      <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-900">Filters</h2>
+          <p class="text-xs text-gray-500">Scope the batch queue, then apply.</p>
+        </div>
+      </div>
+    </div>
+    <form id="banking-filters-form" method="get" action="{% url 'custom_admin:daily_banking_dashboard' %}" class="compact-form p-4">
+      <div class="space-y-4">
+        <div>
+          <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Dates</p>
+          <div class="grid gap-3 lg:grid-cols-3">
+            <div>
+              <label for="banking_date" class="mb-1.5 block text-sm font-medium text-gray-700">Banking date</label>
+              <input type="text" id="banking_date" name="date" value="{{ banking_date|date:'d/m/Y' }}"
+                class="dense-input block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="DD/MM/YYYY" x-ref="bankingDateFilter" readonly autocomplete="off">
+            </div>
+            <div>
+              <label for="date_from" class="mb-1.5 block text-sm font-medium text-gray-700">From</label>
+              <input type="text" id="date_from" name="date_from" value="{{ date_from|date:'d/m/Y' }}"
+                class="dense-input block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="DD/MM/YYYY" x-ref="dateFromFilter" readonly autocomplete="off">
+            </div>
+            <div>
+              <label for="date_to" class="mb-1.5 block text-sm font-medium text-gray-700">To</label>
+              <input type="text" id="date_to" name="date_to" value="{{ date_to|date:'d/m/Y' }}"
+                class="dense-input block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="DD/MM/YYYY" x-ref="dateToFilter" readonly autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Scope</p>
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label for="client_id" class="mb-1.5 block text-sm font-medium text-gray-700">Client</label>
+              <select id="client_id" name="client_id" class="dense-select block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">All clients</option>
+                {% for client in available_clients %}
+                <option value="{{ client.id }}" {% if filter_client_id == client.id|stringformat:'s' %}selected{% endif %}>{{ client.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="campaign_id" class="mb-1.5 block text-sm font-medium text-gray-700">Campaign</label>
+              <select id="campaign_id" name="campaign_id" class="dense-select block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">All campaigns</option>
+                {% for campaign in available_campaigns %}
+                <option value="{{ campaign.id }}" {% if filter_campaign_id == campaign.id|stringformat:'s' %}selected{% endif %}>{{ campaign.name }}{% if campaign.client %} ({{ campaign.client.name }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="batch_id" class="mb-1.5 block text-sm font-medium text-gray-700">Batch</label>
+              <select id="batch_id" name="batch_id" class="dense-select block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">All batches</option>
+                {% for batch in available_batches %}
+                <option value="{{ batch.id }}" {% if filter_batch_id == batch.id|stringformat:'s' %}selected{% endif %}>{{ batch.batch_name }} ({{ batch.campaign.name }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="payment_method" class="mb-1.5 block text-sm font-medium text-gray-700">Payment method</label>
+              <select id="payment_method" name="payment_method" class="dense-select block w-full text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">All bankable methods</option>
+                {% for option in bankable_payment_options %}
+                <option value="{{ option.value }}" {% if filter_payment_method == option.value %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sticky-actions mt-4 flex flex-wrap items-center justify-end gap-3 px-4 py-3">
+        <a href="{% url 'custom_admin:daily_banking_dashboard' %}" class="text-sm font-medium text-gray-600 hover:text-gray-900">Clear all</a>
+        <button type="submit" class="dense-button inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+          Apply filters
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-900">Batch queue</h2>
+        <p class="mt-0.5 text-sm text-gray-500">Open a batch to see every eligible line and create a paying-in slip.</p>
+      </div>
+      <p class="text-[13px] tabular-nums text-slate-600">
+        {% if page_obj.paginator.count %}
+        {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} batches
+        {% else %}
+        0 batches
+        {% endif %}
+      </p>
+    </div>
+    <div id="banking-batch-queue" class="min-h-[12rem]">
+      {% include 'admin/daily_banking/partials/_batch_queue.html' %}
+    </div>
+  </section>
+
+  <section class="workspace-panel overflow-hidden">
+    <div class="dense-panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-900">Donation queue (cross-batch)</h2>
+        <p class="mt-0.5 text-sm text-gray-500">Select eligible rows across batches and create one slip (single-client rule applies).</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500" x-text="`${selectedDonationIds.length} selected`">0 selected</span>
+        <button
+          type="button"
+          @click="openSelectedSlipModal()"
+          class="dense-button inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+          :disabled="selectedDonationIds.length === 0"
+          :class="{ 'opacity-50 cursor-not-allowed': selectedDonationIds.length === 0 }"
+        >
+          Create slip from selected
+        </button>
+      </div>
+    </div>
+
+    {% if dashboard_donations %}
+    <div class="overflow-x-auto">
+      <table class="dense-table min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50">
+          <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <th class="px-4 py-3">
+              <input type="checkbox" @change="toggleAllVisible($event.target.checked)" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            </th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Batch</th>
+            <th class="px-4 py-3">Supporter</th>
+            <th class="px-4 py-3">Client / campaign</th>
+            <th class="px-4 py-3">Payment / ref</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3 text-right">QA</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 bg-white">
+          {% for donation in dashboard_donations %}
+          <tr
+            class="transition-colors hover:bg-slate-50"
+            data-donation-row
+            data-donation-id="{{ donation.id }}"
+            data-client-name="{{ donation.campaign.client.name }}"
+            data-campaign-name="{{ donation.campaign.name }}"
+            data-batch-name="{{ donation.batch.batch_name }}"
+            data-amount="{{ donation.amount }}"
+            data-payment-method="{{ donation.get_payment_method_display }}"
+            data-reference="{% if donation.payment_method == 'cheque' %}{{ donation.cheque_number|default:'' }}{% elif donation.payment_method == 'postal_order' %}{{ donation.postal_order_number|default:'' }}{% elif donation.payment_method == 'caf' %}{{ donation.caf_voucher_number|default:'' }}{% endif %}"
+          >
+            <td class="px-4 py-3">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                :checked="isSelected('{{ donation.id }}')"
+                @change="toggleDonationSelection('{{ donation.id }}', $event.target.checked)"
+              >
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-gray-900">
+              {{ donation.donation_date|date:"d/m/Y"|default:donation.created_at|date:"d/m/Y" }}
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">{{ donation.batch.batch_name }}</p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">
+                {% if donation.donor %}
+                {{ donation.donor.first_name }} {{ donation.donor.last_name }}
+                {% elif donation.data_file_donor %}
+                {{ donation.data_file_donor.first_name }} {{ donation.data_file_donor.last_name }}
+                {% else %}
+                {{ donation.donor_name|default:"Unknown" }}
+                {% endif %}
+              </p>
+              <p class="mt-1 text-xs text-gray-500 font-mono">
+                {% if donation.donor %}
+                {{ donation.donor.urn|default:"" }}
+                {% elif donation.data_file_donor %}
+                {{ donation.data_file_donor.urn|default:"" }}
+                {% endif %}
+              </p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">{{ donation.campaign.client.name }}</p>
+              <p class="mt-1 text-xs text-gray-500">{{ donation.campaign.name }}</p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">{{ donation.get_payment_method_display }}</p>
+              <p class="mt-1 text-xs text-gray-500">
+                {% if donation.payment_method == 'cheque' %}
+                {{ donation.cheque_number|default:"No reference" }}
+                {% elif donation.payment_method == 'postal_order' %}
+                {{ donation.postal_order_number|default:"No reference" }}
+                {% elif donation.payment_method == 'caf' %}
+                {{ donation.caf_voucher_number|default:"No reference" }}
+                {% else %}
+                No reference
+                {% endif %}
+              </p>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
+              £{{ donation.amount|floatformat:2 }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-right">
+              <a
+                href="{% url 'custom_admin:qa_single_donation_review' donation.batch_id donation.id %}"
+                class="text-xs font-medium text-blue-600 hover:text-blue-800"
+              >
+                Open in QA
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if donations_page_obj.has_other_pages %}
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-slate-50 px-4 py-3 text-[13px]">
+      <p class="text-gray-500">Page {{ donations_page_obj.number }} of {{ donations_page_obj.paginator.num_pages }}</p>
+      <div class="flex items-center gap-2">
+        {% if donations_page_obj.has_previous %}
+        <a
+          href="{% url 'custom_admin:daily_banking_dashboard' %}{% if request.GET %}?{{ request.GET.urlencode }}&{% else %}?{% endif %}donations_page={{ donations_page_obj.previous_page_number }}"
+          class="dense-button rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Previous
+        </a>
+        {% endif %}
+        {% if donations_page_obj.has_next %}
+        <a
+          href="{% url 'custom_admin:daily_banking_dashboard' %}{% if request.GET %}?{{ request.GET.urlencode }}&{% else %}?{% endif %}donations_page={{ donations_page_obj.next_page_number }}"
+          class="dense-button rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Next
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="px-6 py-10 text-center text-sm text-gray-500">
+      No eligible donations in scope for the selected filters and date window.
+    </div>
+    {% endif %}
+  </section>
+
+  <div
+    x-show="showSelectedSlipModal"
+    x-cloak
+    @click.self="closeSelectedSlipModal()"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4"
+  >
+    <div class="workspace-modal max-h-[90vh] w-full max-w-lg overflow-y-auto" @click.stop>
+      <div class="workspace-modal-header flex items-center justify-between">
+        <h3 class="text-base font-semibold text-gray-900">Create slip from selected donations</h3>
+        <button @click="closeSelectedSlipModal()" type="button" class="text-gray-400 transition-colors hover:text-gray-600" aria-label="Close">
+          <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form @submit.prevent="submitSelectedSlipCreation()">
+        <div class="space-y-4 px-5 py-4">
+          <div class="flat-card border-blue-200 bg-blue-50 p-4">
+            <div class="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <div class="text-xl font-semibold text-blue-900" x-text="selectedDonationIds.length"></div>
+                <div class="text-sm text-blue-700">Donations</div>
+              </div>
+              <div>
+                <div class="text-xl font-semibold text-blue-900">£<span x-text="selectedTotalAmount"></span></div>
+                <div class="text-sm text-blue-700">Total</div>
+              </div>
+            </div>
+            <div class="mt-3 text-center text-xs text-blue-700">
+              Selected rows must belong to exactly one client.
+            </div>
+          </div>
+
+          <div>
+            <label for="selectedSlipNumber" class="mb-1.5 block text-sm font-medium text-gray-700">
+              Paying-in slip reference <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="selectedSlipNumber"
+              type="text"
+              required
+              maxlength="50"
+              x-model="selectedSlipNumber"
+              placeholder="From your physical bank slip"
+              class="dense-input block w-full font-mono text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              autocomplete="off"
+            >
+          </div>
+
+          <div>
+            <label for="selectedBankingDate" class="mb-1.5 block text-sm font-medium text-gray-700">
+              Banking date <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="selectedBankingDate"
+              x-ref="selectedBankingDatePicker"
+              type="text"
+              required
+              readonly
+              value="{{ banking_date|date:'d/m/Y' }}"
+              class="dense-input block w-full cursor-pointer bg-white text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
+          <button type="button" @click="closeSelectedSlipModal()" class="dense-button rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+          <button
+            type="submit"
+            class="dense-button flex items-center gap-2 rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            :disabled="submittingSelectedSlip || !selectedSlipNumber.trim() || selectedDonationIds.length === 0"
+            :class="{ 'cursor-not-allowed opacity-50': submittingSelectedSlip || !selectedSlipNumber.trim() || selectedDonationIds.length === 0 }"
+          >
+            <span x-text="submittingSelectedSlip ? 'Creating…' : 'Create slip'"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function bankingFiltersApp() {
+    const slipDetailUrlTemplate = '{% url "custom_admin:slip_detail" 0 %}';
+    return {
+      selectedDonationIds: [],
+      selectedSlipNumber: '',
+      showSelectedSlipModal: false,
+      submittingSelectedSlip: false,
+      init() {
+        this.initializeFilterDatePickers();
+      },
+      async initializeFilterDatePickers() {
+        try {
+          await window.ensureFlatpickrAssets();
+          this.mountDatePicker(
+            this.$refs.bankingDateFilter,
+            '{{ banking_date|date:"d/m/Y" }}',
+          );
+          this.mountDatePicker(
+            this.$refs.dateFromFilter,
+            '{{ date_from|date:"d/m/Y" }}',
+          );
+          this.mountDatePicker(this.$refs.dateToFilter, '{{ date_to|date:"d/m/Y" }}');
+        } catch (error) {
+          console.error('Could not initialize daily banking date filters.', error);
+        }
+      },
+      mountDatePicker(input, defaultDate) {
+        if (!input || input._flatpickr || !window.flatpickr) {
+          return;
+        }
+
+        flatpickr(input, {
+          dateFormat: 'd/m/Y',
+          defaultDate,
+          allowInput: false,
+        });
+      },
+      isSelected(donationId) {
+        return this.selectedDonationIds.includes(donationId);
+      },
+      toggleDonationSelection(donationId, checked) {
+        if (checked && !this.selectedDonationIds.includes(donationId)) {
+          this.selectedDonationIds.push(donationId);
+          return;
+        }
+        if (!checked) {
+          this.selectedDonationIds = this.selectedDonationIds.filter((value) => value !== donationId);
+        }
+      },
+      toggleAllVisible(checked) {
+        const visibleIds = Array.from(document.querySelectorAll('[data-donation-row]'))
+          .map((row) => row.dataset.donationId)
+          .filter(Boolean);
+        if (checked) {
+          this.selectedDonationIds = Array.from(new Set([...this.selectedDonationIds, ...visibleIds]));
+          return;
+        }
+        this.selectedDonationIds = this.selectedDonationIds.filter((value) => !visibleIds.includes(value));
+      },
+      openSelectedSlipModal() {
+        if (this.selectedDonationIds.length === 0) {
+          return;
+        }
+        this.selectedSlipNumber = '';
+        this.submittingSelectedSlip = false;
+        this.showSelectedSlipModal = true;
+        this.$nextTick(async () => {
+          try {
+            await window.ensureFlatpickrAssets();
+            this.mountDatePicker(
+              this.$refs.selectedBankingDatePicker,
+              '{{ banking_date|date:"d/m/Y" }}',
+            );
+          } catch (error) {
+            console.error('Could not initialize selected slip date picker.', error);
+          }
+          document.getElementById('selectedSlipNumber')?.focus();
+        });
+      },
+      closeSelectedSlipModal() {
+        this.showSelectedSlipModal = false;
+        this.submittingSelectedSlip = false;
+      },
+      get selectedTotalAmount() {
+        const selected = new Set(this.selectedDonationIds);
+        const total = Array.from(document.querySelectorAll('[data-donation-row]'))
+          .filter((row) => selected.has(row.dataset.donationId))
+          .reduce((sum, row) => {
+            const value = parseFloat(row.dataset.amount || '0');
+            return sum + (Number.isFinite(value) ? value : 0);
+          }, 0);
+        return total.toFixed(2);
+      },
+      async submitSelectedSlipCreation() {
+        if (!this.selectedSlipNumber.trim() || this.selectedDonationIds.length === 0) {
+          return;
+        }
+        this.submittingSelectedSlip = true;
+        const bankingDateRaw = document.getElementById('selectedBankingDate')?.value || '{{ banking_date|date:"d/m/Y" }}';
+        let bankingDate = '{{ banking_date|date:"Y-m-d" }}';
+        if (bankingDateRaw && bankingDateRaw.includes('/')) {
+          const parts = bankingDateRaw.split('/');
+          if (parts.length === 3) {
+            bankingDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+        }
+        try {
+          const response = await fetch('{% url "custom_admin:create_paying_in_slip" %}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: new URLSearchParams({
+              slip_number: this.selectedSlipNumber.trim(),
+              banking_date: bankingDate,
+              notes: '',
+              batch_ids: '[]',
+              donation_ids: JSON.stringify(this.selectedDonationIds),
+              date_from: '{{ date_from_iso }}',
+              date_to: '{{ date_to_iso }}',
+            }),
+          });
+          const data = await response.json();
+          if (data.success) {
+            window.location.href = slipDetailUrlTemplate.replace('/0/', `/${data.slip_id}/`);
+            return;
+          }
+          alert(`Error: ${data.error}`);
+          this.submittingSelectedSlip = false;
+        } catch (error) {
+          console.error(error);
+          alert('Could not create slip. Try again.');
+          this.submittingSelectedSlip = false;
+        }
+      },
+    };
+  }
+</script>
+{% endblock %}

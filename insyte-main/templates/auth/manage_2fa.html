@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    <div class="bg-white rounded-xl shadow-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-8">
+        <h1 class="text-3xl font-bold text-white">Two-Factor Authentication</h1>
+        <p class="mt-2 text-blue-100">Manage your account security settings</p>
+      </div>
+
+      <div class="p-8">
+        {% if messages %}
+        <div class="mb-6 space-y-2">
+          {% for message in messages %}
+          <div class="{% if message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %} px-4 py-3 rounded-lg text-sm">
+            {{ message }}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if has_2fa %}
+        <!-- 2FA is enabled -->
+        <div class="space-y-6">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <svg class="h-6 w-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ml-4">
+              <h3 class="text-lg font-medium text-gray-900">Two-Factor Authentication is Enabled</h3>
+              <p class="mt-1 text-sm text-gray-600">Your account is protected with an additional layer of security.</p>
+            </div>
+          </div>
+
+          <!-- Active Devices -->
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-900 mb-3">Active Authentication Method</h4>
+            
+            {% if active_method == 'totp' %}
+              <div class="bg-white p-3 rounded border border-gray-200 mb-3">
+                <div class="flex items-center">
+                  <i class="fas fa-mobile-alt text-blue-600 mr-3"></i>
+                  <div>
+                    <span class="text-sm font-medium text-gray-900">Authenticator App (TOTP)</span>
+                    <p class="text-xs text-gray-500">Using time-based codes from authenticator app</p>
+                  </div>
+                </div>
+              </div>
+              
+              {% if devices %}
+              <h5 class="text-xs font-medium text-gray-700 mb-2">Active Devices:</h5>
+              <div class="space-y-2">
+                {% for device in devices %}
+                <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                  <div class="flex items-center">
+                    <svg class="h-5 w-5 text-gray-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
+                    </svg>
+                    <span class="text-sm text-gray-900">{{ device.name }}</span>
+                  </div>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Active
+                  </span>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            
+            {% elif active_method == 'email' %}
+              <div class="bg-white p-3 rounded border border-gray-200 mb-3">
+                <div class="flex items-center">
+                  <i class="fas fa-envelope text-info mr-3"></i>
+                  <div>
+                    <span class="text-sm font-medium text-gray-900">Email OTP</span>
+                    <p class="text-xs text-gray-500">Receiving codes via email</p>
+                  </div>
+                </div>
+              </div>
+              
+              {% if email_devices %}
+              <h5 class="text-xs font-medium text-gray-700 mb-2">Active Email Devices:</h5>
+              <div class="space-y-2">
+                {% for device in email_devices %}
+                <div class="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                  <div class="flex items-center">
+                    <i class="fas fa-at text-gray-400 mr-3"></i>
+                    <span class="text-sm text-gray-900">{{ device.name }}</span>
+                  </div>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Active
+                  </span>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            {% endif %}
+          </div>
+
+          <!-- Actions -->
+          <div class="space-y-4">
+            <!-- Regenerate Backup Codes -->
+            <div class="border border-gray-200 rounded-lg p-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h4 class="text-sm font-medium text-gray-900">Backup Codes</h4>
+                  <p class="mt-1 text-sm text-gray-600">Generate new backup codes for account recovery</p>
+                </div>
+                <form method="POST" action="{% url 'auth_app:manage_2fa' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="regenerate_backup_codes">
+                  <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Generate New Codes
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <!-- Switch Method -->
+            <div class="border border-gray-200 rounded-lg p-4">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h4 class="text-sm font-medium text-gray-900">Switch Authentication Method</h4>
+                  <p class="mt-1 text-sm text-gray-600">
+                    Replace the current 2FA method with a different one (e.g. Email ↔ Authenticator App).
+                  </p>
+                </div>
+                <button type="button" onclick="showSwitchModal()"
+                        class="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                  Switch Method
+                </button>
+              </div>
+            </div>
+
+            <!-- Disable 2FA -->
+            <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h4 class="text-sm font-medium text-red-900">Disable Two-Factor Authentication</h4>
+                  <p class="mt-1 text-sm text-red-700">This will reduce your account security</p>
+                </div>
+                <button onclick="showDisableModal()" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                  Disable 2FA
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% else %}
+        <!-- 2FA is disabled -->
+        <div class="space-y-6">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <div class="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <svg class="h-6 w-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ml-4">
+              <h3 class="text-lg font-medium text-gray-900">Two-Factor Authentication is Disabled</h3>
+              <p class="mt-1 text-sm text-gray-600">Enable 2FA to add an extra layer of security to your account.</p>
+            </div>
+          </div>
+
+          <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800">Why enable 2FA?</h3>
+                <div class="mt-2 text-sm text-blue-700 space-y-1">
+                  <p>• Protects your account even if your password is compromised</p>
+                  <p>• Prevents unauthorized access to sensitive data</p>
+                  <p>• Industry best practice for account security</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <a href="{% url 'auth_app:setup_2fa' %}" class="block w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            Enable Two-Factor Authentication
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mt-6 text-center">
+      <a href="{% url 'auth_app:user_profile' %}" class="text-sm text-gray-600 hover:text-gray-900">
+        ← Back to Profile
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Disable 2FA Modal -->
+<div id="disableModal" class="fixed inset-0 bg-gray-500/75 hidden z-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-lg w-full mx-4">
+    <div class="bg-red-600 px-6 py-4">
+      <h3 class="text-lg font-medium text-white">Disable Two-Factor Authentication</h3>
+    </div>
+    <form method="POST" action="{% url 'auth_app:manage_2fa' %}" class="p-6">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="disable">
+      
+      <div class="mb-4">
+        <p class="text-sm text-gray-700 mb-4">
+          Are you sure you want to disable two-factor authentication? This will reduce your account security.
+        </p>
+        <p class="text-sm text-gray-700 mb-4">
+          Enter your password to confirm:
+        </p>
+        <input type="password" 
+               name="password" 
+               required 
+               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+               placeholder="Your password">
+      </div>
+      
+      <div class="flex gap-3">
+        <button type="button" onclick="hideDisableModal()" class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+          Cancel
+        </button>
+        <button type="submit" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+          Disable 2FA
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Switch 2FA Method Modal -->
+<div id="switchModal" class="fixed inset-0 bg-gray-500/75 hidden z-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-lg w-full mx-4">
+    <div class="bg-purple-600 px-6 py-4">
+      <h3 class="text-lg font-medium text-white">Switch Two-Factor Method</h3>
+    </div>
+    <form method="POST" action="{% url 'auth_app:manage_2fa' %}" class="p-6">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="switch_method">
+
+      <div class="mb-4">
+        <p class="text-sm text-gray-700 mb-4">
+          This removes your current 2FA device and takes you to the setup page so you can enrol a new one
+          (for example, switch from Email OTP to an Authenticator App or vice versa). Your account will be
+          without 2FA for a few seconds during setup.
+        </p>
+        <p class="text-sm text-gray-700 mb-4">Enter your password to confirm:</p>
+        <input type="password"
+               name="password"
+               required
+               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+               placeholder="Your password">
+      </div>
+
+      <div class="flex gap-3">
+        <button type="button" onclick="hideSwitchModal()" class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+          Cancel
+        </button>
+        <button type="submit" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+          Continue
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function showDisableModal() {
+  document.getElementById('disableModal').classList.remove('hidden');
+}
+
+function hideDisableModal() {
+  document.getElementById('disableModal').classList.add('hidden');
+}
+
+function showSwitchModal() {
+  document.getElementById('switchModal').classList.remove('hidden');
+}
+
+function hideSwitchModal() {
+  document.getElementById('switchModal').classList.add('hidden');
+}
+
+// Close modals on outside click
+document.getElementById('disableModal')?.addEventListener('click', function(e) {
+  if (e.target === this) {
+    hideDisableModal();
+  }
+});
+document.getElementById('switchModal')?.addEventListener('click', function(e) {
+  if (e.target === this) {
+    hideSwitchModal();
+  }
+});
+</script>
+{% endblock %}

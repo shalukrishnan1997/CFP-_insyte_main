@@ -1,0 +1,265 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Tailwind CSS CLI (downloaded binary)
+.django_tailwind_cli/
+
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3-shm
+db.sqlite3-wal
+media/
+staticfiles/
+static/css/output.css
+# !static/src/
+
+**/migrations/__pycache__/
+**/migrations/*.pyc
+
+
+# Django specific project files
+# Uploaded files
+uploads/
+generated_letters/
+sample_templates/
+
+# CSV data files
+*.csv
+
+# Type checking
+.mypy_cache/
+.pyright/
+.pytest_cache/
+.ruff_cache/
+typings/
+.dmypy.json
+dmypy.json
+
+# IDE
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+.envrc
+secret_key.txt
+*.pem
+*.key
+*.crt
+*.pfx
+gcp-service-account.json
+gcp-service-account.json.b64
+
+# Google Cloud / Document AI (local credential files)
+google-application-credentials.json
+application_default_credentials.json
+*-firebase-adminsdk-*.json
+
+# SSH private keys and PuTTY keys
+id_rsa
+id_ed25519
+id_ecdsa
+*.ppk
+
+# dotenv / editor backups (beyond generic *.bak above)
+.env.backup
+.env~
+.env.*.bak
+
+# Local-only env overrides at repo root
+.env.local
+
+# YAML secret dumps (avoid committing)
+.secrets.yaml
+.secrets.yml
+
+# OAuth / CLI token files sometimes dropped in project root
+.token
+.token.json
+
+# Compiled CSS
+static/css/*.css
+static/css/*.css.map
+!static/css/output.css
+
+# Coverage & Testing
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+nosetests.xml
+test-results/
+playwright-report/
+demo-client-*/
+/test_*.py
+!test_data
+!test_campaigns_performance.py
+!test_full_page_optimization.py
+!test_real_world_performance.py
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis
+dump.rdb
+
+# Logs
+logs/
+*.log
+log.txt
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+*.cache
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+site/
+target/
+
+# Security & sensitive files
+*.sqlite
+*.db
+secrets/
+credentials/
+.secrets/
+
+# Performance test files
+performance_test_*.py
+benchmark_*.py
+
+# AI/ML models (if any)
+*.h5
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.pth
+
+# Large data files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.iso
+
+# Office temporary files
+~$*
+*.tmp
+
+# Project specific
+ARCHITECTURE_*.md
+COMPLETION_*.md
+PERFORMANCE_*.md
+CODE_QUALITY_*.md
+IMPLEMENTATION_*.md
+QUICK_*.md
+FINAL_*.md
+CAMPAIGNS_*.md
+notes.txt
+check_donations.py
+create_sample_template.py
+start_celery_worker.py
+# One-off dev utility scripts (root-level)
+create_portal_user.py
+render_test.py
+test_dom.js
+# Generated HTML render outputs
+client.html
+client_reports.html
+client_supporters.html
+# Temporary report/output files
+body_output.txt
+commit_last_11_report.txt
+
+# Ignore all markdown files; un-ignore important docs (order matters)
+*.md
+!README.md
+!ARCHITECTURE_DECISION_SUMMARY.md
+!GETADDRESS_INTEGRATION.md
+!docs/E2E_TEST_PLAN.md
+!docs/pci-retention.md
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md
+
+# Scanner workstation config (contains secrets)
+scripts/start_scan.bat
+scripts/start_scan.ps1
+
+# Generated output artifacts (should never be committed to root)
+/*.pdf
+playwright_e2e_report.html
+test_wsl.txt
+
+
+# Cursor (optional local overrides; keep shared rules un-ignored if you commit them)
+.cursor/rules/codacy.mdc

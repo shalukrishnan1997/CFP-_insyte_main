@@ -1,0 +1,37 @@
+{
+  "include": [
+    "auth_app",
+    "core",
+    "custom_admin",
+    "responsehandling"
+  ],
+  "exclude": [
+    "**/migrations",
+    "**/__pycache__",
+    ".venv",
+    "venv"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportOptionalMemberAccess": "warning",
+  "reportAssignmentType": "warning",
+  "reportIncompatibleMethodOverride": "warning",
+  "reportIncompatibleVariableOverride": "none",
+  "reportArgumentType": "warning",
+  "reportUnnecessaryComparison": "warning",
+  "reportConstantRedefinition": false,
+  "reportUnusedFunction": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportMissingTypeArgument": "none",
+  "reportPrivateUsage": "none"
+}
