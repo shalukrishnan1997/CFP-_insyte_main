@@ -97,6 +97,8 @@ LOGGING = {
 # Disable django-axes in tests (interferes with force_login / session persistence)
 AXES_ENABLED = False
 
+INSYTE_AGENT_DEBUG = False
+
 # Disable role-routing/2FA-enforcement middleware in tests so force_login can
 # exercise view logic directly without setup redirects.
 MIDDLEWARE = [

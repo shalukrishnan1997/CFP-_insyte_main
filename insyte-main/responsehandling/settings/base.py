@@ -21,6 +21,13 @@ SECRET_KEY = os.getenv(
     "insecure-dev-key-change-in-production",  # Safe default for local dev only
 )
 
+INSYTE_AGENT_DEBUG = os.getenv("INSYTE_AGENT_DEBUG", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # Application definition
 INSTALLED_APPS = [
     # Custom user app MUST be first
