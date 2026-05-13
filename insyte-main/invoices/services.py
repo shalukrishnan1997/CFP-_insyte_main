@@ -4,6 +4,7 @@ Provides invoice management, PDF generation, and email receipt functionality.
 """
 
 import logging
+import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMessage
 from django.core.validators import validate_email
+from django.db import connection
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -227,29 +229,74 @@ class InvoiceService:
         )
 
     @staticmethod
+    def _allocate_invoice_number_if_missing(invoice: Invoice) -> None:
+        """Populate ``invoice_number`` when absent.
+
+        Runs inside ``Invoice.save()``'s enclosing ``transaction.atomic()`` so
+        PostgreSQL ``pg_advisory_xact_lock`` remains held until the invoice row
+        is written.
+
+        Concurrency:
+            * **PostgreSQL**: ``pg_advisory_xact_lock`` serializes allocation for
+              each ``INV-YYYY-MM`` prefix, including the ``count == 0`` case where
+              ``SELECT … FOR UPDATE`` would lock no rows.
+            * **Other backends**: Allocation still uses ``select_for_update()`` on
+              existing rows plus a collision-resolution loop; SQLite serializes
+              writers, which matches typical test / low-concurrency setups.
+        """
+        from invoices.models import Invoice as InvoiceModel
+
+        if invoice.invoice_number:
+            return
+
+        now = timezone.now()
+        prefix = f"INV-{now.year}-{now.month:02d}"
+
+        if connection.vendor == "postgresql":
+            lock_key = zlib.crc32(prefix.encode()) & 0x7FFFFFFF
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_key])
+
+        qs = InvoiceModel.objects.select_for_update().filter(
+            invoice_number__startswith=prefix,
+        )
+        if invoice.pk:
+            qs = qs.exclude(pk=invoice.pk)
+        month_count = qs.count()
+
+        candidate_seq = month_count + 1
+        for _ in range(10_000):
+            candidate = f"{prefix}-{candidate_seq:04d}"
+            clash = InvoiceModel.objects.filter(invoice_number=candidate)
+            if invoice.pk:
+                clash = clash.exclude(pk=invoice.pk)
+            if not clash.exists():
+                invoice.invoice_number = candidate
+                return
+            candidate_seq += 1
+
+        msg = (
+            "Unable to allocate a unique invoice_number after exhaustive attempts; "
+            "contact support."
+        )
+        raise ValidationError(msg)
+
+    @staticmethod
     def prepare_for_save(invoice: Invoice) -> None:
         """Prepare invoice fields before saving: number generation, totals, status.
 
         Called from ``Invoice.save()`` before ``super().save()``.  Mutates
         the invoice instance in-place without persisting it.
 
+        ``Invoice.save`` wraps preparation and persistence in ``atomic()`` so
+        invoice numbering locks remain valid through insert/update.
+
         Args:
             invoice: Invoice instance about to be saved.
         """
         from invoices.models import Invoice as InvoiceModel
 
-        if not invoice.invoice_number:
-            from django.db import connection
-
-            now = timezone.now()
-            prefix = f"INV-{now.year}-{now.month:02d}"
-            with connection.cursor():
-                month_count = (
-                    InvoiceModel.objects.select_for_update()
-                    .filter(invoice_number__startswith=prefix)
-                    .count()
-                )
-            invoice.invoice_number = f"{prefix}-{month_count + 1:04d}"
+        InvoiceService._allocate_invoice_number_if_missing(invoice)
 
         invoice.subtotal = (
             invoice.service_fee
@@ -262,11 +309,20 @@ class InvoiceService:
         invoice.total_amount = invoice.subtotal + invoice.tax_amount
         invoice.balance_due = invoice.total_amount - invoice.amount_paid
 
-        if invoice.amount_paid >= invoice.total_amount and invoice.total_amount > 0:
+        today = timezone.localdate()
+
+        paid_in_full = (
+            invoice.amount_paid >= invoice.total_amount and invoice.total_amount > 0
+        )
+        if paid_in_full:
             invoice.status = InvoiceModel.STATUS_PAID
-        elif (
+            return
+
+        overdue = (
             invoice.status == InvoiceModel.STATUS_ISSUED
-            and invoice.due_date < timezone.now().date()
-            and invoice.balance_due > 0
-        ):
+            and invoice.due_date is not None
+            and invoice.due_date < today
+            and invoice.balance_due > Decimal("0")
+        )
+        if overdue:
             invoice.status = InvoiceModel.STATUS_OVERDUE

@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory
+from django.utils import timezone
 
 from invoices.admin_views import (
     invoice_change_status,
@@ -32,9 +33,9 @@ def _create_invoice(
     return Invoice.objects.create(
         client=campaign.client,
         campaign=campaign,
-        billing_period_start=date.today() - timedelta(days=30),
-        billing_period_end=date.today(),
-        due_date=due_date or (date.today() + timedelta(days=30)),
+        billing_period_start=timezone.localdate() - timedelta(days=30),
+        billing_period_end=timezone.localdate(),
+        due_date=due_date or (timezone.localdate() + timedelta(days=30)),
         created_by=user,
         status=status,
         service_fee=service_fee,
@@ -57,23 +58,19 @@ class TestInvoiceModelStatusTransitions:
         assert invoice.status == Invoice.STATUS_PAID
         assert invoice.balance_due == Decimal("0.00")
 
-    @pytest.mark.skip(
-        reason=(
-            "Pre-existing flake on main, surfaced here because Trivy/lint "
-            "fixes finally got CI past lint. The transition logic in "
-            "InvoiceService.prepare_for_save() does not actually flip "
-            "ISSUED → OVERDUE on first create when due_date is in the past; "
-            "needs a separate investigation that is out of scope for the "
-            "app-split refactor."
-        )
-    )
     def test_issued_invoice_becomes_overdue_when_due_date_passed(self) -> None:
-        """Issued invoice with outstanding balance transitions to overdue."""
+        """Issued invoice with outstanding balance transitions to overdue on save."""
+        past = timezone.localdate() - timedelta(days=1)
         invoice = _create_invoice(
             service_fee=Decimal("80.00"),
             status=Invoice.STATUS_ISSUED,
-            due_date=date.today() - timedelta(days=1),
+            due_date=past,
         )
+
+        invoice.refresh_from_db()
+
+        assert invoice.status == Invoice.STATUS_OVERDUE
+        assert invoice.balance_due > Decimal("0.00")
 
         invoice.save()
         invoice.refresh_from_db()

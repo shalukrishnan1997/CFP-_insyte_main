@@ -810,8 +810,18 @@ class Invoice(models.Model):
         return f"Invoice {self.invoice_number} - {self.client.name}"
 
     def save(self, *args: object, **kwargs: object) -> None:
-        """Override save to prepare invoice fields via InvoiceService."""
+        """Override save to prepare invoice fields via InvoiceService.
+
+        The entire prepare step (including invoice-number allocation with
+        database locks) runs in ``transaction.atomic()`` so numbering and the
+        ``INSERT``/``UPDATE`` share one transaction --- required for PostgreSQL
+        ``pg_advisory_xact_lock`` and ``SELECT … FOR UPDATE`` to protect
+        against duplicate ``invoice_number`` values under concurrency.
+        """
+        from django.db import transaction
+
         from invoices.services import InvoiceService
 
-        InvoiceService.prepare_for_save(self)
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            InvoiceService.prepare_for_save(self)
+            super().save(*args, **kwargs)
