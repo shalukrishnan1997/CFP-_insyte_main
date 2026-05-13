@@ -40,6 +40,31 @@ class TestClientEditBugFix:
         assert test_client.name == "Updated Name"
         assert test_client.is_active is True  # BUG FIX: Should still be True
 
+    def test_empty_action_string_routes_to_update_and_keeps_active(
+        self,
+        authenticated_client: DjangoClient,
+        staff_user: Any,
+    ) -> None:
+        """Explicit ``action`` key with blank value must behave like plain update POST."""
+        test_client = ClientFactory(is_active=True, name="Empty Action Co")
+
+        url = reverse("custom_admin:client_edit", kwargs={"client_id": test_client.id})
+        payload = {
+            "name": "Renamed Via Empty Action",
+            "client_code": "EMP",
+            "email": "empty-action@example.com",
+            "phone": "07123456789",
+            "description": "x",
+            "action": "",
+        }
+
+        response = authenticated_client.post(url, payload)
+        assert response.status_code == 302
+
+        test_client.refresh_from_db()
+        assert test_client.name == "Renamed Via Empty Action"
+        assert test_client.is_active is True
+
     def test_client_deactivate_action_works(
         self,
         authenticated_client: DjangoClient,
