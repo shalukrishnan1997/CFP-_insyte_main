@@ -93,6 +93,53 @@ class TestUserRegistrationForm:
         assert "username" in form.fields
         assert "email" in form.fields
         assert "password" in form.fields
+        assert "password_confirm" in form.fields
+
+
+@pytest.mark.django_db
+class TestUserRegistrationFormPasswordHandling:
+    """Passwords must be hashed at rest via ``AbstractUser.check_password``."""
+
+    def test_valid_form_save_hashes_password_and_verifies_login(self):
+        username = "reg-form-user-alpha"
+        data = {
+            "username": username,
+            "email": "reg-form-alpha@example.com",
+            "first_name": "Reg",
+            "last_name": "User",
+            "password": "Zq8!very-long-registration-pass-alpha",
+            "password_confirm": "Zq8!very-long-registration-pass-alpha",
+        }
+        bound = UserRegistrationForm(data=data)
+        assert bound.is_valid(), repr(bound.errors)
+        saved = bound.save()
+        saved.refresh_from_db()
+        assert saved.password.startswith("md5$") or len(saved.password) > 40
+        assert saved.check_password(data["password"])
+
+    def test_password_mismatch_rejected(self):
+        data = {
+            "username": "reg-beta",
+            "email": "reg-beta@example.com",
+            "first_name": "B",
+            "last_name": "B",
+            "password": "Zq9!matching-length-pass-one",
+            "password_confirm": "Zq9!matching-length-pass-two",
+        }
+        bound = UserRegistrationForm(data=data)
+        assert bound.is_valid() is False
+
+    def test_weak_password_rejected_by_validators(self):
+        data = {
+            "username": "reg-gamma",
+            "email": "reg-gamma@example.com",
+            "first_name": "C",
+            "last_name": "C",
+            "password": "123",
+            "password_confirm": "123",
+        }
+        bound = UserRegistrationForm(data=data)
+        assert bound.is_valid() is False
 
 
 # ---------------------------------------------------------------------------
