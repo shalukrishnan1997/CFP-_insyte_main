@@ -535,7 +535,7 @@ class TestLowOcrConfidenceFlagging:
     """
 
     def test_low_confidence_amount_blocks_auto_approve(self) -> None:
-        """Malformed donation_date × low confidence ⇒ mandatory hold."""
+        """Malformed donation_date x low confidence ⇒ mandatory hold."""
 
         from donations.models import Donation
         from scans.scan_processing_donations import create_donation_from_placeholder

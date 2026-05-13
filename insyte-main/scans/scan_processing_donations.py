@@ -160,7 +160,7 @@ def _confidence_field_requires_mandatory_hold(
     """Return ``True`` when low OCR confidence must block batch auto-approve.
 
     Campaign default ``ocr_confidence_threshold`` is 0.700 while Form Parser often
-    reports 0.50–0.65 for crisply-printed handwriting/amount fields. Once the
+    reports 0.50-0.65 for crisply-printed handwriting/amount fields. Once the
     parsed amount/date is internally consistent, carrying a fractional point
     below the organisational threshold alone should not condemn an otherwise
     clean extraction to mandatory hold.
@@ -172,9 +172,7 @@ def _confidence_field_requires_mandatory_hold(
 
     if domain_field == "amount":
         parsed = parse_extracted_amount(extracted)
-        if parsed.value >= Decimal("0.01") and not parsed.parse_failed:
-            return False
-        return True
+        return not (parsed.value >= Decimal("0.01") and not parsed.parse_failed)
 
     if domain_field == "donation_date":
         raw = str(extracted.get("donation_date", "") or "").strip()
@@ -271,8 +269,6 @@ def _resolved_payment_and_notes(
     valid_codes = {str(code) for code, _lbl in Donation.PAYMENT_METHOD_CHOICES}
     if extracted_method in valid_codes:
         payment_method_resolved = extracted_method
-    elif batch_method in valid_codes:
-        payment_method_resolved = batch_method
     elif batch_method:
         payment_method_resolved = batch_method
     else:

@@ -382,7 +382,7 @@ class TestE2eOcrStubPropagatesLowConfidence:
     """A stubbed Document AI extractor must drive the placeholder + donation state."""
 
     def test_stubbed_ocr_low_confidence_propagates_to_donation_hold(self) -> None:
-        """``run_ocr_and_extract`` stub returns empty amount × low confidence ⇒ hold."""
+        """``run_ocr_and_extract`` stub returns empty amount x low confidence ⇒ hold."""
 
         setup = _build_pipeline_setup(threshold=Decimal("0.850"))
         extracted = _stub_extracted_payload(amount="", amount_confidence=0.6)
